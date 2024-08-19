@@ -51,11 +51,13 @@ def plot_envelope_disspation(filename):
     '''
 
     ###Author masks
-    # our_data_mask = np.invert([item.lower() == 'me' for item in author])
-    # carney_data_mask = np.invert([item.lower() == 'c' for item in author])
-    # vanKepen_data_mask = np.invert([item.lower() == 'vk' for item in author])
-    # legend=['me','C','vK']
-    # mask_array = [our_data_mask,carney_data_mask,vanKepen_data_mask]
+    our_data_mask = np.invert([item.lower() == 'me' for item in author])
+    carney_data_mask = np.invert([item.lower() == 'c' for item in author])
+    vanKepen_data_mask = np.invert([item.lower() == 'vk' for item in author])
+
+    legend=['me','C','vK']
+    mask_array = [our_data_mask,carney_data_mask,vanKepen_data_mask]
+    colors=['C0','C1','C2']
 
 
     #### temperature mask
@@ -66,16 +68,15 @@ def plot_envelope_disspation(filename):
     #
     #
     ### binary mask
-    single_mask = np.invert([item.lower() == 's' for item in binary])
-    binary_mask = np.invert([item.lower() == 'cb' for item in binary])
-    multiple_mask = np.invert([item.lower() == 'hm' or item.lower() == 'wb' for item in binary])
-    legend=['s','b','m']
-    mask_array = [single_mask,binary_mask,multiple_mask]
+    # single_mask = np.invert([item.lower() == 's' for item in binary])
+    # binary_mask = np.invert([item.lower() == 'cb' for item in binary])
+    # multiple_mask = np.invert([item.lower() == 'hm' or item.lower() == 'wb' for item in binary])
+    # legend=['s','b','m']
+    # mask_array = [single_mask,binary_mask,multiple_mask]
 
 
     symbol_size = 16
 
-    colors=['C0','C1','C2']
     for ii in range(len(mask_array)):
         double_mask = [[element, element] for element in mask_array[ii]]
         # print(double_mask)
@@ -101,7 +102,7 @@ def plot_envelope_disspation(filename):
     ax.set_xlabel(r'$\log{g}$'+ ' [stellar gravity]', fontsize=font_size+4)
     ax.set_ylabel(r'$C_{HCO^+}$' +' [concentration factor]' , fontsize=font_size+4)
     ax.tick_params(direction="in",which='both', labelsize=16)
-    ax.set_xlim(2.20,4.1)
+    ax.set_xlim(2.50,4.1)
     ax.set_ylim(0.1,0.91)
 
     ax2 = ax.twiny()
@@ -119,7 +120,7 @@ def plot_envelope_disspation(filename):
 
 if __name__ == "__main__":
     file='concentration_factors.txt'
-    fig_name='Envelope_by_binary.pdf'
+    fig_name='Envelope_excluding_one.pdf'
     plot_envelope_disspation(file)
     # read_text_file('concentration_factors.txt')
     # read_text_file(file)

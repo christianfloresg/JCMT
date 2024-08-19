@@ -28,9 +28,16 @@ def archival_data_preparation(path_to_folder):
 def print_path(name_sdf,name_star,molecule):
 
     if molecule=='C18O':
-        print("export ORAC_DATA_IN=.")
+        print("kappa")
+        print("convert")
+
+        print("export ORAC_DATA_IN=./")
+        print("export ORAC_DATA_OUT=./")
+
         name_Tmb = name_star+"_C18O_Tmb"
         print("cdiv in = "+ name_sdf + " scalar = 0.63 out = "+name_Tmb)
+
+        print('setunits FileName_masked_tmb units=\ "K km/s \" ')
 
         name_resmapled = name_star+"_C18O_Tmb_resampled"
         print("sqorst in = "+name_Tmb+" out = "+name_resmapled +" factors = [6, 6, 1] conserve ")
@@ -39,9 +46,14 @@ def print_path(name_sdf,name_star,molecule):
         print("ndf2fits in = " + name_resmapled +".sdf" + " out = "+fits_name+"_C18O.fits")
 
     elif molecule=='HCO+':
+        print("kappa")
+        print("convert")
+
         print("export ORAC_DATA_IN=.")
         name_Tmb = name_star+"_HCO+_Tmb"
         print("cdiv in = "+ name_sdf + " scalar = 0.63 out = "+name_Tmb)
+
+        print('setunits ' +name_Tmb+ ' units=\ "K km/s \" ')
 
         name_resmapled = name_star+"_HCO+_Tmb_resampled"
         print("sqorst in = "+name_Tmb+" out = "+name_resmapled +" factors = [6, 6, 1] conserve ")
@@ -50,8 +62,8 @@ def print_path(name_sdf,name_star,molecule):
         print("ndf2fits in = " + name_resmapled +".sdf" + " out = "+fits_name+"_HCO+.fits")
 
 if __name__ == "__main__":
-    print_path(name_sdf="ga20231125_72_1_reduced001.sdf",name_star="IRAS04591-0856",molecule="HCO+")
-    # print_path(name_sdf="ga20231125_74_1_reduced001.sdf",name_star="IRAS05379-0758",molecule="C18O")
+    # print_path(name_sdf="ga20240221_64_1_reduced001.sdf",name_star="DoAr25",molecule="HCO+")
+    print_path(name_sdf="ga20220820_15_1_0p20bin001.sdf",name_star="V347_Aur",molecule="HCO+")
 
     # path_to_folder = '/Users/christianflores/Documents/work/Astronomy_data/JCMT/M22BH10B/IRAS04591-0856/HCO+/'
 

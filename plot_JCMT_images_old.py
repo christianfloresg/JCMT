@@ -168,13 +168,5 @@ if __name__ == "__main__":
     # filename1 = 'OphIRS63_SB_12CO_robust_0.5_rebinned.high_vel1.image.moment.integrated.fits'
     # filename2 = 'OphIRS63_SB_C18O_robust_-0.5.rebinned.image.moment.weighted_coord.fits'
 
-    # plot_mom_zero_map(path,filename0, figname='aa?',save=False)
     plot_dust_continuum(path,filename0,
-                        figname=filename0.split('.')[0]+'_8x7', save=True)
-
-    # plot_mom_one_map(folder_path=path, mom_zero_filename = filename1, mom_one_filename= filename2,
-    #                  figname='H2CO_r-05_mom1', save=False)
-
-    # plot_dust_levels(continuum_path=continuum_path, continuum_filename=filename0,
-    #                     figname='Continuum_levels_large', save=True)
-
+                        figname=filename0.split('.')[0]+'_8x7', save=False)
