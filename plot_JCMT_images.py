@@ -6,9 +6,18 @@ import scipy.ndimage.interpolation as interpol
 import os
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from astropy.io import fits as pyfits
+import matplotlib.colors as colors
+
+#Astropy modules to deal with coordinates
+from astropy.wcs import WCS
+from astropy.wcs import Wcsprm
+from astropy.io import fits
+from astropy.wcs import utils
+
 from astropy.coordinates import SkyCoord
 from astropy import units as u
-import matplotlib.colors as colors
+from astropy.visualization.wcsaxes import SphericalCircle
+
 
 class DataAnalysis:
     """
@@ -23,158 +32,198 @@ class DataAnalysis:
                     the spectral axis
     """
 
-    def __init__(self, path, filename, continuum=False, integrated=False):
-        joint_path = os.path.join(path, filename)
-        try:
-            hdulist = pyfits.open(joint_path)
-        except:
-            hdulist = pyfits.open(joint_path + ".fits")
-        prihdr = hdulist[0].header
-        self.header = prihdr
-        scidata = hdulist[0].data
+    def __init__(self, path, filename):
 
-        if continuum:
-            try:
-                self.image = scidata[0, :, :]
-            except:
-                self.image = scidata[:, :]
+        self.image = 1
+
+        try:
+            data_cube = fits.open(os.path.join(path, filename))
+        except:
+            data_cube = fits.open(os.path.join(path, filename + '.fits'))
+
+        self.filename = filename
+        self.header = data_cube[0].header
+        self.ppv_data = data_cube[0].data
+
+
+        # If the data has a 4 dimension, turn it into 3D
+        if (np.shape(data_cube[0].data)[0] == 1):
+            self.ppv_data = data_cube[0].data[0, :, :, :]
+
+        self.nx = self.header['NAXIS1']
+        self.ny = self.header['NAXIS2']
+
+        self.cdelt_ra = self.header['CDELT1'] * 3600
+
+        try:
+            self.nz = self.header['NAXIS3']
+            self.vel = self.get_vel(self.header)
+            dv = self.vel[1] - self.vel[0]
+            if (dv < 0):
+                dv = dv * -1
+
+            self.molecule = self.header['MOLECULE']
+
+
+        except:
+            print('This is a 2D image')
+
+        self.wcs = WCS(self.header)
+
+    def get_vel(self, head):
+
+
+        if "v" in head['CTYPE3'].lower():
+
+            refnv = head["CRPIX3"]
+            refv = head["CRVAL3"]
+            dv = head["CDELT3"]
+            ### Construct the velocity axis
+
+            vel = np.zeros(head["NAXIS3"])
+            for ii in range(0, len(vel)):
+                vel[ii] = refv + (ii - refnv + 1) * dv
+
+            return vel
+
         else:
-            if integrated:
-                self.image = scidata[0, :, :]
-            else:
-                try:
-                    self.image = scidata[:, :, :]
-                except:
-                    self.image = scidata[0, :, :, :]
 
-                self.nchan = prihdr['NAXIS3']
-                self.crval_velo = prihdr['CRVAL3']
-                self.cdelt_velo = prihdr['CDELT3']
-                self.crpix_velo = prihdr['CRPIX3']
-                self.ctype_velo = prihdr['CTYPE3']
-                try:
-                    self.nu = prihdr['RESTFRQ']
-                except:
-                    if 2.30e11 < self.crval_velo < 2.31e11:
-                        self.nu = 2.3053800e11
-                    elif 2.20e11 < self.crval_velo < 2.21e11:
-                        self.nu = 2.2039868e11
-                    elif 2.19e11 < self.crval_velo < 2.199e11:
-                        self.nu = 2.1956035e11
-                    elif 2.18e11 < self.crval_velo < 2.189e11:  # I added Formaldehyde
-                        self.nu = 2.1822219200e11
-
-                velo_ini = (self.crval_velo - self.cdelt_velo * (
-                        self.crpix_velo - 1) - self.nu) / self.nu * 2.99792458e10
-                velo_fin = (self.crval_velo + self.cdelt_velo * (
-                        self.nchan - self.crpix_velo) - self.nu) / self.nu * 2.99792458e10
-                self.velo_array = np.linspace(velo_ini, velo_fin, self.nchan)
-                self.cdelt_velo = abs(self.velo_array[0] - self.velo_array[1])
-
-        self.nx = prihdr['NAXIS1']
-        self.ny = prihdr['NAXIS2']
-
-        try:
-            self.bmaj = prihdr['BMAJ'] * 3600  # bmaj in arcsec
-            self.bmin = prihdr['BMIN'] * 3600  # bmin in arcsec
-            self.bpa = prihdr['BPA']
-
-        except:
-            print('This is a non-convolved model or real data')
-            self.bmaj = 0  # bmaj in arcsec
-            self.bmin = 0  # bmin in arcsec
-            self.bpa = 0
-
-        self.crpix_ra = prihdr['CRPIX1']
-        self.crpix_dec = prihdr['CRPIX2']
-        self.crval_ra = prihdr['CRVAL1']
-        self.crval_dec = prihdr['CRVAL2']
-        self.cdelt_ra = prihdr['CDELT1']
-        self.cdelt_dec = prihdr['CDELT2']
-        self.ImsizeRA = abs(self.cdelt_ra) * (self.nx - 1) * 3600  # image size in arcsec
-        self.ImsizeDEC = abs(self.cdelt_dec) * (self.ny - 1) * 3600
-
-        ra_ini = self.crval_ra - abs(self.cdelt_ra) * (self.crpix_ra - 1)
-        ra_fin = self.crval_ra + abs(self.cdelt_ra) * (self.nx - self.crpix_ra)
-        self.ra_array = np.linspace(ra_ini, ra_fin, self.nx)
-
-        dec_ini = self.crval_dec - abs(self.cdelt_dec) * (self.crpix_dec - 1)
-        dec_fin = self.crval_dec + abs(self.cdelt_dec) * (self.ny - self.crpix_dec)
-        self.dec_array = np.linspace(dec_ini, dec_fin, self.ny)
+            print("The CTYPE3 variable in the fitsfile header does not start with F for frequency or V for velocity")
+            return
 
 
-def masked_array(data, threshold):
-    return (data > threshold).astype(int)
+def integrated_intensity(path, filename):
+    '''
+    Get the flux density (Jy) at the position center over 1 beam
+    :param path:
+    :param filename:
+    :return:
+    '''
 
+    return 1
 
-
-
-def plot_dust_continuum(continuum_path, continuum_filename,
-                          figname='standard_name',save=False):
+def make_average_spectrum_data(path, filename):
     """
-    Create a plot containing the Moment one map in colors and the dust continuum emission
-    overalid in black contours
+    Average spectrum of the whole cube.
     """
+    data_cube = DataAnalysis(path, filename)
+    moment_0 = DataAnalysis(path, filename+'_mom0.fits')
 
-    continuum_image_file = DataAnalysis(continuum_path, continuum_filename, continuum=True, integrated=False)
-    continuum_image = continuum_image_file.image
-    ra_array_continuum = (continuum_image_file.ra_array - np.nanmedian(continuum_image_file.ra_array))*3600
-    dec_array_continuum = (continuum_image_file.dec_array - np.nanmedian(continuum_image_file.dec_array))*3600
+    if 'HCO+' in data_cube.molecule:
+        aperture_radius = 7.05
+    elif 'C18O ' in data_cube.molecule:
+        aperture_radius = 7.635
+    else:
+        raise Exception("Sorry, I need to calculate such aperture radius")
 
-    fig = plt.figure(figsize=(8, 7))
-    f = fig.add_subplot(1, 1, 1)
-    # current_cmap = plt.cm.get_cmap('hot').copy()
-    # current_cmap.set_bad(color='white')
+    pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
+    x_center,y_center = moment_0.wcs.world_to_pixel(skycoord_object)
+    # print(x,y)
+    velocity = data_cube.vel
 
-    pax = f.imshow(continuum_image, origin='lower',
-                   extent=(ra_array_continuum[0], ra_array_continuum[-1], dec_array_continuum[0], dec_array_continuum[-1]),
-                   cmap='jet',vmax=0.8,vmin=0)#AsinhNorm(vmin=np.nanmin(continuum_image),vmax=np.nanmax(continuum_image)))
+    ### This needs to be changed by selecting pixels within 1 aperture,
+    ### Need to work on the code below
+    ### I could use the same for the integration of the emission.
+    # center_beam_values=[]
+    # for xx in range():
+    #     for yy in range():
+    #         if xx < x_center + aperture_radius and yy < y_center + aperture_radius:
+    #             center_beam_values.append(data_cube.ppv_data[:,xx,yy])
 
-    # pax = f.contour(ra_array_continuum,dec_array_continuum,continuum_image,colors='w',linewidth=0.8,
-    #                 levels=[0.12,0.15,0.2,0.3,0.4,0.45])
+    image = data_cube.ppv_data[:,int(y)-6:int(y)+6,int(x)-6:int(x)+6]* pix_per_beam
+    average_spectrum = np.nanmedian(image, axis=(1, 2))
 
-    divider = make_axes_locatable(f)
-    cax = divider.append_axes("right", size="4%", pad=0.08)
-    cbar = plt.colorbar(pax, cax=cax, format='%.1f', extend='neither')
-    cbar.set_label(r'$\int T_{mb} dV \; [\rm K \, km/s] $', size=22)
-    cbar.ax.tick_params(labelsize=18)
+    return average_spectrum, velocity
 
-    # f.set_xlim(-0.75,0.75)
-    # f.set_ylim(-0.75,0.75)
-    # f.set_xlim(-4.49,4.49)
-    # f.set_ylim(-4.49,4.49)
-
-    elips_cont = Ellipse(xy=(-40, -50), width=15, height=15,
-                    angle=90, facecolor='gray', edgecolor='k',lw=2.0,alpha=0.6)
-
-    # f.add_artist(elips_cont)
-
-    f.set_xlabel(r'$\rm \Delta \,RA \:(arcsec)$', fontsize=22)
-    f.set_ylabel(r'$\rm \Delta \,DEC \:(arcsec)$', fontsize=22)
-    f.tick_params(axis='both', which='both', labelsize=22)
-
-    if save == True:
-        plt.savefig(os.path.join(save_fig_folder,figname + '.png'), bbox_inches='tight',transparent=True)
+def plot_average_spectrum(path,filename,save=False):
+    """
+    This one plots the average spectrum
+    """
+    spectrum, velocity = make_average_spectrum_data(path,filename)
+    plt.figure()
+    # plt.title("Averaged Spectrum ("+mole_name+") @"+dir_each)
+    plt.xlabel("velocity [km/s]")
+    plt.ylabel("Intensity")
+    # Set the value for horizontal line
+    y_horizontal_line = 0
+    plt.axhline(y_horizontal_line, color='red', linestyle='-')
+#     plt.axvline(Vsys, color='red', linestyle='--')
+    plt.plot(velocity,spectrum,"-",color="black",lw=1)
+    plt.tick_params(axis='both', direction='in')
+    plt.xlim(-10,30)
+    if save:
+        plt.savefig(os.path.join('Figures', 'spectrum_'+filename), bbox_inches='tight')
     plt.show()
 
 
+def plot_moment_zero_map(path,filename,save=False):
+    '''
+    Create moment maps using the python package bettermoments.
+    Currently only moment 0 and 8 work. Some unknown issues with the velocity
+    ones.
+    Need to give the data, velocity, and rms levels.
+    The moment maps will be computed using a given velocity position
+    previously calculated and a velocity dispersion given from gaussian fit.
+    A 3 sigma is what we will use for now.
+    We adopt a sigma clipping of 1*rms.
+    :param data:
+    :param velax:
+    :param rms:
+    :param x0:
+    :param sigma:
+    :param moment_number:
+    :param save:
+    :return:
+    '''
+
+
+    data_cube = DataAnalysis(path, filename+'.fits')
+    moment_0 = DataAnalysis(path, filename+'_mom0.fits')
+
+    ### Here I can go from sky position to pixel coordinates
+
+    image_mom_0 = moment_0.ppv_data
+
+    if 'HCO+' in data_cube.molecule:
+        aperture_radius = 7.05
+    elif 'C18O ' in data_cube.molecule:
+        aperture_radius = 7.635
+    else:
+        raise Exception("Sorry, I need to calculate such aperture radius")
+
+    pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
+    image_mom_0 = image_mom_0 * pix_per_beam
+
+    peak = np.nanmax(image_mom_0)
+    levels = np.array([0.2,  0.5, 0.8, 0.95])
+    levels = levels * peak
+
+    ## Moment zero
+    fig1 = plt.subplot(projection=moment_0.wcs)
+    mom0_im = fig1.imshow(image_mom_0, cmap="viridis", origin='lower',vmax=0.7)
+    # divider = make_axes_locatable(fig1)
+    # cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, label='Integrated Intensity (K * km/s)')
+    contour = fig1.contour(image_mom_0, levels=levels, colors="black")
+    plt.clabel(contour, inline=True, fontsize=8)
+
+    # skycoord_object = SkyCoord('04 56 57.0 +51 30 50.88', unit=(u.hourangle, u.deg))
+    s = SphericalCircle(skycoord_object, aperture_radius * u.arcsec,
+                        edgecolor='white', facecolor='none',
+                        transform=fig1.get_transform('fk5'))
+
+    fig1.add_patch(s)
+
+    if save:
+        plt.savefig(os.path.join('Figures',filename), bbox_inches='tight')
+    plt.show()
+
 if __name__ == "__main__":
-    save_fig_folder = 'Figures/'
-    path = 'JCMT_data'
-    continuum_path = 'Continuum'
 
-    filename0 = 'IRAS04369+2539_C18O'
+    path = '.'
+    filename='V347_AurHCO+_resamp'
+    skycoord_object = SkyCoord('04 56 57.0 +51 30 50.88', unit=(u.hourangle, u.deg))
 
-    # filename1 = 'OphIRS63_SB_12CO_robust_0.5_rebinned.high_vel1.image.moment.integrated.fits'
-    # filename2 = 'OphIRS63_SB_C18O_robust_-0.5.rebinned.image.moment.weighted_coord.fits'
-
-    # plot_mom_zero_map(path,filename0, figname='aa?',save=False)
-    plot_dust_continuum(path,filename0,
-                        figname=filename0.split('.')[0]+'_8x7', save=True)
-
-    # plot_mom_one_map(folder_path=path, mom_zero_filename = filename1, mom_one_filename= filename2,
-    #                  figname='H2CO_r-05_mom1', save=False)
-
-    # plot_dust_levels(continuum_path=continuum_path, continuum_filename=filename0,
-    #                     figname='Continuum_levels_large', save=True)
-
+    plot_moment_zero_map(path, filename,save=True)
+    # plot_average_spectrum(path, filename,save=True)
+    # make_average_spectrum_data(path, filename)
