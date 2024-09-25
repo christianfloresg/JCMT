@@ -118,18 +118,21 @@ def create_shell_script_moment_maps(path_to_folder,sdf_name,source_name,molec):
     file.write('INPUTNAME="'+sdf_name+'" \n')
     file.write('SOURCE="'+source_name+'" \n')
     file.write('MOLEC="'+molec+'" \n')
-    # file.write('RESA="_resampled" \n')
+    file.write('RESA="_resampled" \n')
     file.write('SOURCENAME=$SOURCE"_"$MOLEC \n')
-    # file.write('RESAMP=$SOURCE"_"$MOLEC$RESA \n')
-    file.write('RESAMP=$SOURCE"_"$MOLEC$ \n')
+    file.write('RESAMP=$SOURCE"_"$MOLEC$RESA \n')
+    # file.write('RESAMP=$SOURCE"_"$MOLEC \n')
     file.write('cdiv in=$INPUTNAME.sdf scalar=0.63 out=$SOURCENAME.sdf \n')
     file.write('setunits $SOURCENAME.sdf units=\"K km/s \" \n')
     file.write('sqorst in=$SOURCENAME.sdf out=$RESAMP.sdf factors="[6,6,1] conserve" \n')
     file.write('convert \n')
     file.write('ndf2fits in=$RESAMP.sdf out=$RESAMP.fits \n')
+    file.write('mkdir /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ '\n')
     file.write('mv $RESAMP.sdf /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ '\n')
     file.write('mv $RESAMP.fits /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ ' \n')
-    file.write('cd /Users/christianflores/Documents/GitHub/JCMT \n')
+    file.write('cd /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ ' \n')
+    file.write('mv $RESAMP.sdf $SOURCENAME.sdf \n')
+    file.write('mv $RESAMP.fits $SOURCENAME.fits \n')
     file.close()
 
 def run_moment_map_shell_script(path_to_folder):
@@ -288,7 +291,7 @@ def plot_average_spectrum(path,filename,save=False):
     plt.show()
 
 
-def plot_moment_zero_map(filename,source_name,save=False):
+def plot_moment_zero_map(filename,source_name,sky_cord_object=False,save=False):
     '''
     Create moment maps using the python package bettermoments.
     Currently only moment 0 and 8 work. Some unknown issues with the velocity
@@ -333,19 +336,20 @@ def plot_moment_zero_map(filename,source_name,save=False):
 
     ## Moment zero
     fig1 = plt.subplot(projection=moment_0.wcs)
-    mom0_im = fig1.imshow(image_mom_0, cmap="viridis", origin='lower')#,vmax=0.7)
+    mom0_im = fig1.imshow(image_mom_0, cmap="viridis", origin='lower')#,vmax=0.3)
     # divider = make_axes_locatable(fig1)
     # cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, label='Integrated Intensity (K * km/s)')
     contour = fig1.contour(image_mom_0, levels=levels, colors="black")
     plt.clabel(contour, inline=True, fontsize=8)
 
-    # skycoord_object = SkyCoord('04 56 57.0 +51 30 50.88', unit=(u.hourangle, u.deg))
-    s = SphericalCircle(skycoord_object, aperture_radius * u.arcsec,
-                        edgecolor='white', facecolor='none',
-                        transform=fig1.get_transform('fk5'))
 
-    fig1.add_patch(s)
+    if sky_cord_object:
+        s = SphericalCircle(skycoord_object, aperture_radius * u.arcsec,
+                            edgecolor='white', facecolor='none',
+                            transform=fig1.get_transform('fk5'))
+
+        fig1.add_patch(s)
 
     if save:
         plt.savefig(os.path.join('Figures',filename), bbox_inches='tight')
@@ -354,22 +358,29 @@ def plot_moment_zero_map(filename,source_name,save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'V347_Aur'
-    molecule ='HCO+'
-    ### Get the shell script for moment map preparation
-    # path_to_folder='M22BH10B/V347Aur/C18O/reduced/'
-    # create_shell_script_moment_maps(path_to_folder,sdf_name='ga20220818_48_1_0p20bin001',source_name=source_name,molec='C18O')
+    ### Step 1 source name
+    source_name = 'IRAS04489+3042'
+    molecule ='C18O'
+    fits_file_name=source_name+'_'+molecule #'V347_Aur_HCO+'
+
+    ### Step 2
+    ## Get the shell script for moment map preparation
+    # path_to_folder='M22BH10B/'+source_name+'/'+molecule+'/reduced/'
+    # create_shell_script_moment_maps(path_to_folder,sdf_name='ga20220819_78_1_0p20bin001',
+    #                                 source_name=source_name,molec=molecule)
     # run_moment_map_shell_script(path_to_folder='.')
 
+    ### Step 3
     #### run the BTS to create moment maps
-    # folder_file='sdf_and_fits/V347_Aur/'
-    # fits_file_name='V347_Aur_HCO+'
+    # folder_file='sdf_and_fits/'+source_name+'/'
     # BTS_param_file = create_moment_masking_parameterfile(folder_file, fits_file_name)
     # run_BTS(BTS_param_file)
 
+    ### Step 3
     ### Plot the maps
-    filename='V347_Aur_HCO+'
-    skycoord_object = SkyCoord('04 56 57.0 +51 30 50.88', unit=(u.hourangle, u.deg))
-    plot_moment_zero_map(filename,source_name=source_name,save=True)
+    # skycoord_object = SkyCoord('04 56 57.0 +51 30 50.88', unit=(u.hourangle, u.deg))
+    plot_moment_zero_map(fits_file_name,source_name=source_name,save=True)
+
+    ### Step X Not working yet
     # plot_average_spectrum(path, filename,save=True)
     # make_average_spectrum_data(path, filename)
