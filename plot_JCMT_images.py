@@ -7,15 +7,14 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 #Astropy modules to deal with coordinates
 from astropy.wcs import WCS
-from astropy.wcs import Wcsprm
 from astropy.io import fits
-from astropy.wcs import utils
 
+from astroquery.simbad import Simbad
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.visualization.wcsaxes import SphericalCircle
-
 import BTS
+import seaborn as sns
 
 class DataAnalysis:
     """
@@ -144,7 +143,7 @@ def run_moment_map_shell_script(path_to_folder):
     subprocess.check_call(['bash',os.path.join(path_to_folder,"moment_map_preparation.sh")], cwd=path_to_folder)
 
 
-def create_moment_masking_parameterfile(folder_file, fits_file_name,cube_param_name='Fit_cube.param'):
+def create_moment_masking_parameterfile(source_name, fits_file_name,cube_param_name='Fit_cube.param'):
     '''
     Copy the parameter file needed to run BTS and create moment maps
     Modify the files themselves so they have the appropriate input data
@@ -155,9 +154,10 @@ def create_moment_masking_parameterfile(folder_file, fits_file_name,cube_param_n
     cube_param_name: default is Fit_cube.param in the same directory as this file
     '''
 
+    folder_file= os.path.join('sdf_and_fits',source_name)#  sdf_and_fits/'+source_name+'/'
     data_cube = DataAnalysis(folder_file, fits_file_name + '.fits')
     molecule = data_cube.molecule
-    source_name =data_cube.source_name
+    # source_name =data_cube.source_name
 
     ### copying the file
     moment_param_filename = source_name + '_' + molecule + '_moments.param'  ## Name of the cube.param file
@@ -237,51 +237,114 @@ def integrated_intensity(path, filename):
 
     return 1
 
-def make_average_spectrum_data(path, filename):
+
+def get_icrs_coordinates(object_name):
+    # Initialize Simbad object and customize output to include coordinates
+    custom_simbad = Simbad()
+    custom_simbad.add_votable_fields('coordinates')
+
+    # Query Simbad for the object
+    result_table = custom_simbad.query_object(object_name)
+
+    # Check if the query returned any results
+    if result_table is None:
+        print(f"Object '{object_name}' not found in SIMBAD.")
+        return None
+
+    # Extract the RA and DEC columns from the result
+    ra = result_table['RA'][0]  # Right Ascension in HMS (hours, minutes, seconds)
+    dec = result_table['DEC'][0]  # Declination in DMS (degrees, arcminutes, arcseconds)
+
+    # Convert RA and DEC to a SkyCoord object in the ICRS frame
+    coord = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg), frame='icrs')
+
+    # Return the ICRS coordinates in degrees
+    return coord
+
+
+def make_averaged_spectrum_data(source_name, molecule):
     """
     Average spectrum of the whole cube.
     """
-    data_cube = DataAnalysis(path, filename)
-    moment_0 = DataAnalysis(path, filename+'_mom0.fits')
+
+    filename = source_name+'_'+molecule
+    data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
+    moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
 
     if 'HCO+' in data_cube.molecule:
         aperture_radius = 7.05
-    elif 'C18O ' in data_cube.molecule:
+    elif data_cube.molecule == 'C18O':
         aperture_radius = 7.635
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
 
     pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
-    x_center,y_center = moment_0.wcs.world_to_pixel(skycoord_object)
-    # print(x,y)
+    velocity = data_cube.vel
+    cube = data_cube.ppv_data
+
+    averaged_spectrum = np.nanmean(cube, axis=(1,2)) * pix_per_beam
+
+    return averaged_spectrum, velocity
+
+
+def make_central_spectrum_data(source_name, molecule):
+    """
+    Average spectrum of the central beam.
+
+    """
+
+    filename = source_name+'_'+molecule
+    data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
+    moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
+
+    if 'HCO+' in data_cube.molecule:
+        aperture_radius = 7.05
+    elif data_cube.molecule == 'C18O':
+        aperture_radius = 7.635
+    else:
+        raise Exception("Sorry, I need to calculate such aperture radius")
+
+    pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
     velocity = data_cube.vel
 
-    ### This needs to be changed by selecting pixels within 1 aperture,
-    ### Need to work on the code below
-    ### I could use the same for the integration of the emission.
-    # center_beam_values=[]
-    # for xx in range():
-    #     for yy in range():
-    #         if xx < x_center + aperture_radius and yy < y_center + aperture_radius:
-    #             center_beam_values.append(data_cube.ppv_data[:,xx,yy])
+    x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object)
+    # print(x_center, y_center)
 
-    image = data_cube.ppv_data[:,int(y)-6:int(y)+6,int(x)-6:int(x)+6]* pix_per_beam
-    average_spectrum = np.nanmedian(image, axis=(1, 2))
+    # Initialize a list to store the pixel values within the aperture
+    center_beam_values = []
+
+    # Iterate over a square region, but filter by distance to make it circular
+    for xx in range(int(x_center - aperture_radius), int(x_center + aperture_radius) + 1):
+        for yy in range(int(y_center - aperture_radius), int(y_center + aperture_radius) + 1):
+            # Calculate the distance from the center
+            distance = np.sqrt((xx - x_center) ** 2 + (yy - y_center) ** 2)
+
+            # Check if the distance is within the aperture radius
+            if distance <= aperture_radius:
+                # Append the data at this pixel position
+                center_beam_values.append(data_cube.ppv_data[:, xx, yy])
+
+    # Convert center_beam_values to a NumPy array for easy manipulation
+    center_beam_values = np.array(center_beam_values)
+
+    average_spectrum = np.nanmean(center_beam_values, axis=0) * pix_per_beam
 
     return average_spectrum, velocity
 
-def plot_average_spectrum(path,filename,save=False):
+def plot_spectrum(source_name, molecule,save=False):
     """
     This one plots the average spectrum
     """
-    spectrum, velocity = make_average_spectrum_data(path,filename)
+    # spectrum, velocity = make_central_spectrum_data(source_name, molecule)
+    spectrum, velocity =make_averaged_spectrum_data(source_name,molecule)
+
     plt.figure()
     # plt.title("Averaged Spectrum ("+mole_name+") @"+dir_each)
-    plt.xlabel("velocity [km/s]")
-    plt.ylabel("Intensity")
+    plt.xlabel("velocity (km/s)")
+    plt.ylabel("Averaged Spectrum (K)")
     # Set the value for horizontal line
     y_horizontal_line = 0
-    plt.axhline(y_horizontal_line, color='red', linestyle='-')
+    # plt.axhline(y_horizontal_line, color='red', linestyle='-')
 #     plt.axvline(Vsys, color='red', linestyle='--')
     plt.plot(velocity,spectrum,"-",color="black",lw=1)
     plt.tick_params(axis='both', direction='in')
@@ -322,27 +385,35 @@ def plot_moment_zero_map(filename,source_name,sky_cord_object=False,save=False):
 
     if 'HCO+' in data_cube.molecule:
         aperture_radius = 7.05
+        cmap = sns.color_palette("YlOrBr",as_cmap=True)
+
     elif data_cube.molecule == 'C18O':
         aperture_radius = 7.635
+        cmap = sns.color_palette("YlGnBu",as_cmap=True)
+
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
 
     pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
     image_mom_0 = image_mom_0 * pix_per_beam
+    # image_mom_0[image_mom_0 == 0] = np.nan
 
     peak = np.nanmax(image_mom_0)
     levels = np.array([0.2,  0.5, 0.8, 0.95])
     levels = levels * peak
 
+
     ## Moment zero
     fig1 = plt.subplot(projection=moment_0.wcs)
-    mom0_im = fig1.imshow(image_mom_0, cmap="viridis", origin='lower')#,vmax=0.3)
+    mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower')#,vmax=1)
     # divider = make_axes_locatable(fig1)
     # cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, label='Integrated Intensity (K * km/s)')
     contour = fig1.contour(image_mom_0, levels=levels, colors="black")
-    plt.clabel(contour, inline=True, fontsize=8)
+    # plt.clabel(contour, inline=True, fontsize=8)
 
+    fig1.set_xlabel('RA',size=12)
+    fig1.set_ylabel('DEC',size=12)
 
     if sky_cord_object:
         s = SphericalCircle(skycoord_object, aperture_radius * u.arcsec,
@@ -353,34 +424,40 @@ def plot_moment_zero_map(filename,source_name,sky_cord_object=False,save=False):
 
     if save:
         plt.savefig(os.path.join('Figures',filename), bbox_inches='tight')
+        # plt.savefig(os.path.join('Figures',filename+'_transparent'), bbox_inches='tight', transparent=True)
     plt.show()
 
 
 if __name__ == "__main__":
 
     ### Step 1 source name
-    source_name = 'IRAS04489+3042'
-    molecule ='C18O'
+    containing_folder='M23AP008'
+    source_name = 'V347_Aur'
+    molecule ='HCO+'
     fits_file_name=source_name+'_'+molecule #'V347_Aur_HCO+'
 
     ### Step 2
     ## Get the shell script for moment map preparation
-    # path_to_folder='M22BH10B/'+source_name+'/'+molecule+'/reduced/'
-    # create_shell_script_moment_maps(path_to_folder,sdf_name='ga20220819_78_1_0p20bin001',
+    # path_to_folder=containing_folder+'/'+source_name+'/'+molecule+'/reduced/'
+    # create_shell_script_moment_maps(path_to_folder,sdf_name='ga20230703_53_1_0p20bin001.sdf',
     #                                 source_name=source_name,molec=molecule)
     # run_moment_map_shell_script(path_to_folder='.')
 
     ### Step 3
     #### run the BTS to create moment maps
-    # folder_file='sdf_and_fits/'+source_name+'/'
-    # BTS_param_file = create_moment_masking_parameterfile(folder_file, fits_file_name)
+    # BTS_param_file = create_moment_masking_parameterfile(source_name, fits_file_name)
     # run_BTS(BTS_param_file)
 
     ### Step 3
     ### Plot the maps
     # skycoord_object = SkyCoord('04 56 57.0 +51 30 50.88', unit=(u.hourangle, u.deg))
-    plot_moment_zero_map(fits_file_name,source_name=source_name,save=True)
+    # skycoord_object = get_icrs_coordinates('V347 Aur')
+    # plot_moment_zero_map(fits_file_name,source_name=source_name,save=True,sky_cord_object=True)
 
-    ### Step X Not working yet
-    # plot_average_spectrum(path, filename,save=True)
-    # make_average_spectrum_data(path, filename)
+    ### Step 4
+    ### Get an averaged spectrum over 1 beam of the map. You MUST give the SIMBAD-searchable name
+    skycoord_object = get_icrs_coordinates('V347 Aur')
+    plot_spectrum(source_name, molecule)
+
+    ## Step 5
+    ### fit the spectrum with a 2D gaussian.
