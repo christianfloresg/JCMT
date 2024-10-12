@@ -1,0 +1,5 @@
+## Source name , noise level, Tmb,  peak SNR,  velocity centroid,  FWHM,  sigma, ... molecule 
+GV_Tau 0.303 3.182 15.0 6.44 0.845 0.359 C18O
+IRAS04181+2655S 0.2575 2.074 9.9 6.665 0.571 0.242 C18O
+IRAS04181+2655M 0.2629 1.499 9.6 6.836 0.546 0.232 C18O
+V347_Aur 0.3128 0.781 10.1 7.892 0.509 0.216 C18O

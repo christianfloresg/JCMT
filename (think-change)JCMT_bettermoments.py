@@ -180,11 +180,11 @@ def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=
         plt.ylabel('Intensity (A)')
         if save:
             try:
-                plt.savefig(os.path.join('fitting_line', filename1.strip('.fits') + '_spectrum_fit.png'),
+                plt.savefig(os.path.join('fitting_line', filename.strip('.fits') + '_spectrum_fit.png'),
                             bbox_inches='tight',
                             transparent=False)
             except:
-                plt.savefig(os.path.join('fitting_line', filename2.strip('.fits') + '_spectrum_fit.png'),
+                plt.savefig(os.path.join('fitting_line', filename.strip('.fits') + '_spectrum_fit.png'),
                             bbox_inches='tight',
                             transparent=False)
         plt.show()
