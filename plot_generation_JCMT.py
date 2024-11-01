@@ -183,7 +183,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule):
     #### Obtain spectral properties from fitting a gaussian
     spectrum, velocity = make_central_spectrum_data(source_name, molecule)
     Tmb = round(np.nanmax(spectrum),3)
-    pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-20,30])
+    pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-30,30])
     rounded_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
 
@@ -207,7 +207,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule):
     write_or_update_values(file_name='spectrum_parameters_'+molecule+'.txt', new_values=values_to_text)
 
 
-def plot_spectrum(source_name, molecule, type='central', save=False):
+def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
     """
     This one plots the average spectrum
     """
@@ -223,7 +223,7 @@ def plot_spectrum(source_name, molecule, type='central', save=False):
         pos = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name, position=4)
         pos = float(pos)
     except:
-        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-20,30])
+        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-20,30],plot=False)
 
     plt.figure()
     # plt.title("Averaged Spectrum ("+mole_name+") @"+dir_each)
@@ -236,9 +236,10 @@ def plot_spectrum(source_name, molecule, type='central', save=False):
     plt.tick_params(axis='both', direction='in')
     plt.xlim(pos - 10, pos+ 10)
     if save:
-        plt.savefig(os.path.join('Figures', 'spectrum_'+filename), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/Spectra/', 'spectrum_'+source_name+'_'+molecule+'_'+type), bbox_inches='tight', dpi=300)
 
-    plt.show()
+    if plot:
+        plt.show()
 
 
 def get_icrs_coordinates(object_name):
@@ -266,7 +267,7 @@ def get_icrs_coordinates(object_name):
 
 
 
-def plot_moment_zero_map(filename,source_name,sky_cord_object=False,save=False):
+def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,plot=True):
     '''
     Create moment maps using the python package bettermoments.
     Currently only moment 0 and 8 work. Some unknown issues with the velocity
@@ -286,7 +287,7 @@ def plot_moment_zero_map(filename,source_name,sky_cord_object=False,save=False):
     :return:
     '''
 
-
+    filename=source_name+'_'+molecule #'V347_Aur_HCO+'
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
     moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
 
@@ -320,7 +321,7 @@ def plot_moment_zero_map(filename,source_name,sky_cord_object=False,save=False):
 
     ## Moment zero
     fig1 = plt.subplot(projection=moment_0.wcs)
-    mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower')#,vmax=1)
+    mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower',vmax=0.5)
     # divider = make_axes_locatable(fig1)
     # cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, label='Integrated Intensity (K * km/s)')
@@ -338,39 +339,108 @@ def plot_moment_zero_map(filename,source_name,sky_cord_object=False,save=False):
         fig1.add_patch(s)
 
     if save:
-        plt.savefig(os.path.join('Figures',filename), bbox_inches='tight',dpi=300)
+        plt.savefig(os.path.join('Figures/Moment_maps/',filename), bbox_inches='tight',dpi=300)
         # plt.savefig(os.path.join('Figures',filename+'_transparent'), bbox_inches='tight', transparent=True)
-    plt.show()
+
+    if plot:
+        plt.show()
 
     fit_gaussian_2d(image_mom_0,moment_0.wcs)
 
+
+def mass_produce_moment_maps(folder_fits, molecule='C18O'):
+    """
+    Processes all folders within 'folder_fits' to generate moment maps and spectra
+    for specified molecules (default is 'C18O').
+
+    Plot moment-zero map.
+
+    All operations are run in no-plotting mode, saving the maps.
+
+    Args:
+        folder_fits (str): Path to the main folder containing subfolders with fits data.
+        molecule (str): Name of the molecule to process ('HCO+' or 'C18O').
+    """
+    folder_list = sorted(next(os.walk(folder_fits))[1])  # List of subfolders
+    print("Folders found:", folder_list)
+
+    for sources in folder_list:
+        try:
+            # Check if the necessary file exists before running the function
+            filename = sources + '_' + molecule
+            fits_file_path = os.path.join(folder_fits, sources, f"{filename}.fits")
+            if not os.path.isfile(fits_file_path):
+                print(f"No such file: {fits_file_path}. Skipping this folder.")
+                continue  # Move to the next folder if the file doesn't exist
+
+            # Generate the moment-zero map
+            plot_moment_zero_map(sources, molecule, save=True, sky_cord_object=True, plot=False)
+
+        except IndexError as err:
+            print(f"Map for {sources} was not produced. Check the moment maps.")
+            print(f"An error occurred: {err}")
+
+        except Exception as e:
+            print(f"An unexpected error occurred with {sources}: {e}")
+
+def mass_produce_spectral_plots(folder_fits, molecule):
+    """
+    Processes all folders within 'folder_fits' to generate moment maps and spectra
+    for specified molecules (default is 'C18O').
+
+    Plot moment-zero map.
+
+    All operations are run in no-plotting mode, saving the maps.
+
+    Args:
+        folder_fits (str): Path to the main folder containing subfolders with fits data.
+        molecule (str): Name of the molecule to process ('HCO+' or 'C18O').
+    """
+    folder_list = sorted(next(os.walk(folder_fits))[1])  # List of subfolders
+    print("Folders found:", folder_list)
+
+    for sources in folder_list:
+        try:
+            # Check if the necessary file exists before running the function
+            filename = sources + '_' + molecule
+            fits_file_path = os.path.join(folder_fits, sources, f"{filename}.fits")
+            if not os.path.isfile(fits_file_path):
+                print(f"No such file: {fits_file_path}. Skipping this folder.")
+                continue  # Move to the next folder if the file doesn't exist
+
+            # Generate the moment-zero map
+            plot_spectrum(sources, molecule, type='central', save=True, plot=False)
+            plot_spectrum(sources, molecule, type='fov', save=True, plot=False)
+
+        except IndexError as err:
+            print(f"Map for {sources} was not produced. Check the moment maps.")
+            print(f"An error occurred: {err}")
+
+        except Exception as e:
+            print(f"An unexpected error occurred with {sources}: {e}")
+
+
 if __name__ == "__main__":
 
-    source_name = 'IRAS04181+2655S'
-    molecule ='HCO+'
-    fits_file_name=source_name+'_'+molecule #'V347_Aur_HCO+'
+    source_name = 'IRAS04489+3042'
+    # molecule ='HCO+'
+    molecule ='C18O'
     ### Should slightly modify this so it tries with the given source name OR the name given here.
     ### Even better I should have a list of the SIMBAD name for each of the sources, so I don't need to
     ### input this one manually every time!
 
-    retrieve_and_write_spectral_properties(source_name, molecule)
+    # retrieve_and_write_spectral_properties(source_name, molecule)
 
     ### Step 1 creates a plot of the spectrum
-    ### this also estimate the velocity of this component.
-    ### you can save parameters to text file. These can be used
-    ### later to restrict the velocity range of the moment maps.
-
-    plot_spectrum(source_name, molecule,type='central')
-
+    # plot_spectrum(source_name, molecule,type='central',save=True)
+    # plot_spectrum(source_name, molecule,type='fov',save=True)
 
 
     ### Step 3
     ### Plot the maps
-    # skycoord_object = SkyCoord('04 56 57.0 +51 30 50.88', unit=(u.hourangle, u.deg))
-    # skycoord_object = get_icrs_coordinates('V347 Aur')
-    # plot_moment_zero_map(fits_file_name,source_name=source_name,save=False,sky_cord_object=True)
+    plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
 
-    ### Step 4
-    ### Get an averaged spectrum over 1 beam of the map. You MUST give the SIMBAD-searchable name
-    # plot_spectrum(source_name, molecule)
+    #### Mass produce moment maps
+    # mass_produce_moment_maps('sdf_and_fits',molecule)
+    # mass_produce_spectral_plots('sdf_and_fits',molecule)
 

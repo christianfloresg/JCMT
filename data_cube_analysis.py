@@ -49,7 +49,7 @@ def calculate_peak_SNR(filename,source_name, velo_limits=[2, 10], separate=False
         peak_signal_in_cube = np.nanmax(image[upper_idx:lower_idx,:,:])
 
 
-    ### define the channels to calculate the nouse to be 20% of the band on each side
+    ### define the channels to calculate the noise to be 20% of the band on each side
     n_channels_noise = int(velocity_length*0.20)
     array_of_noise_lower = np.nanstd(image[:n_channels_noise, :, :], axis=0)
     array_of_noise_upper = np.nanstd(image[(velocity_length-n_channels_noise):, :, :], axis=0)
@@ -221,11 +221,11 @@ def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=
 
     return  x0, FWHM, sigma
 
-def fit_gaussian_to_spectrum(spectrum,velocity,velo_range=[-30,30]):
+def fit_gaussian_to_spectrum(spectrum,velocity,velo_range=[-30,30],plot=True):
 
     velocity_min,velocity_max= velo_range[0],velo_range[1]
     position, FWHM, sigma = spectrum_properties(spectrum, velocity, velocity_min=velocity_min,
-                                          velocity_max=velocity_max, nsigma=6, plot=True)
+                                          velocity_max=velocity_max, nsigma=6, plot=plot)
 
     return position, FWHM, sigma
 
@@ -270,9 +270,10 @@ def fit_gaussian_2d(image, wcs):
     x_valid = x[mask]
     y_valid = y[mask]
     image_valid = image[mask]
+    image_max = np.nanmax(image)
 
     # Initial guess for the parameters: amplitude, x0, y0, sigma_x, sigma_y, theta, offset
-    initial_guess = (np.nanmax(image), image.shape[1] // 2, image.shape[0] // 2, 1, 1, 0, np.nanmin(image))
+    initial_guess = (image_max, image.shape[1] // 2, image.shape[0] // 2, 1, 1, 0, np.nanmin(image))
 
     print(image.shape[1] // 2,image.shape[0] // 2 )
     # Fit the Gaussian to the valid data points
@@ -335,8 +336,10 @@ def fit_gaussian_2d(image, wcs):
 
         # Plot the contours, matching the WCS coordinate system
         c1 = ax.contour(ra, dec, gaussian_2d((x, y), *popt).reshape(image.shape),
-                   transform=ax.get_transform('world'), colors='w', linewidths=1,levels=[0.5,0.7,0.9])
-        c1.clabel(c1, inline=True)
+                   transform=ax.get_transform('world'), linewidths=1,levels=[0.3*amplitude,
+                                                                             0.5*amplitude,
+                                                                             0.8*amplitude])
+        # c1.clabel(c1, inline=True)
 
         plt.show()
 
