@@ -177,16 +177,25 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     vmin,vmax=0.0,0.0 ## define initial values in case the fit does not work
 
     try:
-        #### Obtain spectral properties from fitting a gaussian
-
+        #### First fit the spectrum retrieved from the whole cube
         spectrum_fov, velocity_fov = make_averaged_spectrum_data(source_name, molecule)
+        pos_fov, FHWM_fov, sigma_fov = fit_gaussian_to_spectrum(spectrum_fov, velocity_fov,velo_range=[-30,30] ,plot=plot)
+        # rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
+        vmin_fov = pos_fov - 10*abs(sigma_fov)
+        vmax_fov = pos_fov + 10*abs(sigma_fov)
+
+
+        integrated_intensity_fov = integrate_flux_over_velocity(velocities=velocity_fov, flux=spectrum_fov,
+                                                                      v_min=pos_fov - 5*abs(sigma_fov),
+                                                                      v_max=pos_fov + 5*abs(sigma_fov))
+
+
+        ### Obtain spectral properties from fitting a gaussian to the central spectra
         spectrum, velocity = make_central_spectrum_data(source_name, molecule)
-
-        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-30,30] ,plot=plot)
+        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[vmin_fov,vmax_fov] ,plot=plot)
         rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
-        ### Get the integrated intensity from the spectrum
         vmin = pos - 5*abs(sigma)
         vmax = pos + 5*abs(sigma)
 
@@ -201,6 +210,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         line_noise = (np.nanstd(spectrum[LB_idx_noise_low:LB_idx_noise_high])+
                       np.nanstd(spectrum[UB_idx_noise_low:UB_idx_noise_high]))/2.
 
+        ### Get the integrated intensity from the spectrum
         integrated_intensity_main_beam = integrate_flux_over_velocity(velocities=velocity, flux=spectrum,
                                                                       v_min=vmin, v_max=vmax)
 
