@@ -241,7 +241,6 @@ def integrated_intensity(path, filename):
     return 1
 
 
-
 if __name__ == "__main__":
 
     ### Step 1 source name

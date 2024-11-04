@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from astropy.visualization.wcsaxes import SphericalCircle
 from data_cube_analysis import fit_gaussian_to_spectrum, write_or_update_values\
-    , calculate_peak_SNR, integrate_flux_over_velocity, fit_gaussian_2d
+    , calculate_peak_SNR, integrate_flux_over_velocity, fit_gaussian_2d, find_nearest_index
 
 
 def find_simbad_source_in_file(file_name, search_word):
@@ -174,17 +174,14 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     """
 
     fits_file_name = source_name+'_'+molecule #'V347_Aur_HCO+'
+    vmin,vmax=0.0,0.0 ## define initial values in case the fit does not work
 
-    #### Get noise & peak SNR from the cube
-    peak_signal_in_cube, average_noise_images = calculate_peak_SNR(fits_file_name,source_name=source_name,
-                                                                   velo_limits=[5, 10], separate=True)
-    noise_level = round(average_noise_images,4)
-    peak_SNR = round(peak_signal_in_cube/average_noise_images,1)
-
-    #### Obtain spectral properties from fitting a gaussian
     try:
+        #### Obtain spectral properties from fitting a gaussian
+
+        spectrum_fov, velocity_fov = make_averaged_spectrum_data(source_name, molecule)
+
         spectrum, velocity = make_central_spectrum_data(source_name, molecule)
-        Tmb = round(np.nanmax(spectrum),4)
 
         pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-30,30] ,plot=plot)
         rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
@@ -192,8 +189,23 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         ### Get the integrated intensity from the spectrum
         vmin = pos - 5*abs(sigma)
         vmax = pos + 5*abs(sigma)
+
+        ### Calculate the peak emission of the line,
+        idx_line_low,idx_line_high = find_nearest_index(velocity,vmin),find_nearest_index(velocity,vmax)
+        Tmb = round(np.nanmax(spectrum[idx_line_low:idx_line_high]),4)
+
+        ### Calculate  the noise of the line.
+        LB_idx_noise_low,LB_idx_noise_high = find_nearest_index(velocity,-50), find_nearest_index(velocity,vmin-10)
+        UB_idx_noise_low,UB_idx_noise_high = find_nearest_index(velocity,vmax+10), find_nearest_index(velocity,50)
+
+        line_noise = (np.nanstd(spectrum[LB_idx_noise_low:LB_idx_noise_high])+
+                      np.nanstd(spectrum[UB_idx_noise_low:UB_idx_noise_high]))/2.
+
         integrated_intensity_main_beam = integrate_flux_over_velocity(velocities=velocity, flux=spectrum,
                                                                       v_min=vmin, v_max=vmax)
+
+        line_SNR = round(Tmb/line_noise,2)
+
     except ValueError as err:
         print(f"Parameters for {source_name} and {molecule} was not produced.")
         print(f"An error occurred: {err}")
@@ -201,6 +213,15 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         Tmb = 0.0
         integrated_intensity_main_beam = 0.0
         rounded_vel_pos, rounded_FHWM, rounded_sigma = 0.0,0.0,0.0
+        line_noise = 1.0
+        line_SNR = 0.0
+
+    #### Get noise & peak SNR from the cube
+    peak_signal_in_cube, average_noise_images = calculate_peak_SNR(fits_file_name,source_name=source_name,
+                                                                   velo_limits=[vmin, vmax], separate=True)
+    image_noise_level = round(average_noise_images,4)
+    peak_SNR = round(peak_signal_in_cube/average_noise_images,1)
+
 
     if plot:
         print('the integrated intensity is ', integrated_intensity_main_beam)
@@ -212,7 +233,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
 
     # Prepare the values for writing/updating
     values_to_text = [
-        source_name, noise_level, Tmb, peak_SNR, rounded_vel_pos, rounded_FHWM,
+        source_name, image_noise_level, peak_SNR, line_noise, Tmb, line_SNR , rounded_vel_pos, rounded_FHWM,
         rounded_sigma, integrated_intensity_main_beam, molecule
     ]
 

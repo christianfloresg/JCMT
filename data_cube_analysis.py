@@ -97,18 +97,25 @@ def write_or_update_values(file_name, new_values):
     :param new_values: A list of four values to be written to the file
     """
 
+    # values_to_text = [
+    #     source_name, image_noise_level, peak_SNR, line_noise, Tmb, line_SNR , rounded_vel_pos, rounded_FHWM,
+    #     rounded_sigma, integrated_intensity_main_beam, molecule
+    # ]
+
     # Format the values with specific byte alignment
     formatted_entry = (
         f"{new_values[0]:<17}"  # Source name in 17 bytes
         f"{'':<8}"  # 8 bytes of white space
-        f"{new_values[1]:<10.4f}"  # Noise level with 4 decimal places in 10 bytes
-        f"{new_values[2]:<10.3f}"  # Tmb with 3 decimal places in 10 bytes
-        f"{new_values[3]:<10.1f}"  # Peak SNR with 1 decimal place in 10 bytes
-        f"{new_values[4]:<10.3f}"  # Position with 3 decimal places in 10 bytes
-        f"{new_values[5]:<10.3f}"  # FWHM with 3 decimal places in 10 bytes
-        f"{new_values[6]:<10.3f}"  # Sigma with 3 decimal places in 10 bytes
-        f"{new_values[7]:<10.3f}"  # Integrated intensity with 3 decimal places in 10 bytes
-        f"{new_values[8]:<10}"  # Molecule in 10 bytes
+        f"{new_values[1]:<15.4f}"  # Image noise level with 4 decimal places in 10 bytes
+        f"{new_values[2]:<15.1f}"  # Peak image SNR with 1 decimal place in 10 bytess
+        f"{new_values[3]:<15.4f}"  # Line noise level with 4 decimal places in 10 bytes
+        f"{new_values[4]:<15.3f}"  # Tmb with 3 decimal places in 10 bytes
+        f"{new_values[5]:<15.1f}"  # Peak line SNR with 1 decimal place in 10 bytes
+        f"{new_values[6]:<15.3f}"  # Position with 3 decimal places in 10 bytes
+        f"{new_values[7]:<15.3f}"  # FWHM with 3 decimal places in 10 bytes
+        f"{new_values[8]:<15.3f}"  # Sigma with 3 decimal places in 10 bytes
+        f"{new_values[9]:<15.3f}"  # Integrated intensity with 3 decimal places in 10 bytes
+        f"{new_values[10]:<15}"  # Molecule in 10 bytes
     )
 
     # Read the file if it exists, otherwise start with a header
@@ -120,27 +127,31 @@ def write_or_update_values(file_name, new_values):
         header = (
             f"{'## Source name':<17}"
             f"{'':<8}"  # 8 bytes of white space
-            f"{'Noise lvl':<10}"
-            f"{'Tmb ':<10}"
-            f"{'Peak SNR':<10}"
-            f"{'Velocity':<10}"
-            f"{'FWHM ':<10}"
-            f"{'Sigma':<10}"
-            f"{'Integ. Int .':<10}"
-            f"{'Molecule':<10}\n"
+            f"{'Image Noise':<15}"
+            f"{'Peak Im. SNR':<15}"
+            f"{'Line Noise':<15}"
+            f"{'Tmb ':<15}"
+            f"{'Peak Line SNR':<15}"
+            f"{'Velocity':<15}"
+            f"{'FWHM ':<15}"
+            f"{'Sigma':<15}"
+            f"{'Integ. Int .':<15}"
+            f"{'Molecule':<15}\n"
         )
 
         header2 = (
             f"{'## ':<17}"
             f"{'':<8}"  # 8 bytes of white space
-            f"{'(K)':<10}"
-            f"{'(K)':<10}"
-            f"{' ':<10}"
-            f"{'(km/s)':<10}"
-            f"{'(km/s)':<10}"
-            f"{'(km/s)':<10}"
-            f"{'(K * km/s)':<10}"
-            f"{' ':<10}\n"
+            f"{'(K)':<15}"
+            f"{' ':<15}"
+            f"{'(K)':<15}"
+            f"{'(K)':<15}"
+            f"{' ':<15}"
+            f"{'(km/s)':<15}"
+            f"{'(km/s)':<15}"
+            f"{'(km/s)':<15}"
+            f"{'(K * km/s)':<15}"
+            f"{' ':<15}\n"
         )
         lines = [header,header2]
 
@@ -163,35 +174,6 @@ def write_or_update_values(file_name, new_values):
     with open(file_name, 'w') as file:
         file.writelines(lines)
 
-    # Check if the file exists, if not, append "## this text" to the first line
-    # try:
-    #     with open(file_name, 'r') as file:
-    #         lines = file.readlines()
-    # except FileNotFoundError:
-    #     # If the file doesn't exist, start with "## this text" as the first line
-    #     lines = ["## Source name , noise level, Tmb,  peak SNR,  velocity centroid,  FWHM,  sigma, ... molecule \n"]
-    #
-    # first_value = new_values[0]
-    # found = False
-    #
-    # # Check if the first value is already in the file
-    # for i, line in enumerate(lines):
-    #     # Split the line by space (or other delimiter) to extract values
-    #     existing_values = line.strip().split()
-    #
-    #     # If the first value matches, update the corresponding line
-    #     if existing_values[0] == str(first_value):
-    #         lines[i] = " ".join(map(str, new_values)) + "\n"
-    #         found = True
-    #         break
-    #
-    # # If the first value was not found, append the new values
-    # if not found:
-    #     lines.append(" ".join(map(str, new_values)) + "\n")
-    #
-    # # Write the updated lines back to the file
-    # with open(file_name, 'w') as file:
-    #     file.writelines(lines)
 
 def find_nearest_index(array, value):
     array = np.asarray(array)
