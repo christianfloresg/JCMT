@@ -1,10 +1,10 @@
 #!/usr/bin/env bash 
 export STARLINK_DIR=/Users/christianflores/Programs/star-2023A 
 source $STARLINK_DIR/etc/profile  
-cd /Users/christianflores/Documents/work/Astronomy_data/JCMT/M22BH10B/FPTau/HCO+/reduced/
+cd /Users/christianflores/Documents/work/Astronomy_data/JCMT/M24AH15A/DG-Tau/HCO+/reduced/
 kappa 
-INPUTNAME="ga20220923_38_1_0p20bin001" 
-SOURCE="FPTau" 
+INPUTNAME="ga20240919_40_1_0p20bin001" 
+SOURCE="DG-Tau" 
 MOLEC="HCO+" 
 RESA="_resampled" 
 SOURCENAME=$SOURCE"_"$MOLEC 
@@ -15,9 +15,9 @@ setunits $SOURCENAME.sdf units="K km/s "
 ndf2fits in=$SOURCENAME.sdf out=$SOURCENAME"_original".fits 
 sqorst in=$SOURCENAME.sdf out=$RESAMP.sdf factors="[6,6,1] conserve" 
 ndf2fits in=$RESAMP.sdf out=$RESAMP.fits 
-mkdir /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/FPTau
-mv $RESAMP.sdf /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/FPTau
-mv $RESAMP.fits /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/FPTau 
-cd /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/FPTau 
+mkdir /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/DG-Tau
+mv $RESAMP.sdf /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/DG-Tau
+mv $RESAMP.fits /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/DG-Tau 
+cd /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/DG-Tau 
 mv $RESAMP.sdf $SOURCENAME.sdf 
 mv $RESAMP.fits $SOURCENAME.fits 

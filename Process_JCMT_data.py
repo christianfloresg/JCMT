@@ -65,6 +65,9 @@ class DataAnalysis:
             s_name = self.header['OBJECT'].strip()
             self.source_name = s_name.replace(' ', '_')
 
+            # temp_change = self.header['SPECSYS'] = 'LSRK'  # Be cautious with this change if the original frame is essential
+            # data_cube.wcs = WCS(temp_change)
+
         except:
             print('This is a 2D image')
 
@@ -242,15 +245,16 @@ def integrated_intensity(path, filename):
 if __name__ == "__main__":
 
     ### Step 1 source name
-    containing_folder='M22BH10B'
-    source_name = 'FPTau'
+    containing_folder='M24AH15A'
+    source_name = 'DG-Tau'
     molecule ='HCO+'
+    # molecule ='C18O'
     fits_file_name=source_name+'_'+molecule #'V347_Aur_HCO+'
 
     ### Step 2
     # Get the shell script for moment map preparation
     path_to_folder=containing_folder+'/'+source_name+'/'+molecule+'/reduced/'
-    create_shell_script_moment_maps(path_to_folder,sdf_name='ga20220923_38_1_0p20bin001.sdf',
+    create_shell_script_moment_maps(path_to_folder,sdf_name='ga20240919_40_1_0p20bin001.sdf',
                                     source_name=source_name,molec=molecule)
     run_moment_map_shell_script(path_to_folder='.')
 

@@ -123,7 +123,6 @@ def make_central_spectrum_data(source_name, molecule):
 
     filename = source_name+'_'+molecule
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
-    moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
 
     if 'HCO+' in data_cube.molecule:
         aperture_radius = 7.05
@@ -137,7 +136,9 @@ def make_central_spectrum_data(source_name, molecule):
     pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
     velocity = data_cube.vel
 
-    x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object)
+    # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
+    x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
+
     # print(x_center, y_center)
 
     # Initialize a list to store the pixel values within the aperture
@@ -162,7 +163,7 @@ def make_central_spectrum_data(source_name, molecule):
     return average_spectrum, velocity
 
 
-def retrieve_and_write_spectral_properties(source_name, molecule):
+def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     """
     This is a preparatory step where a gaussian is fitted to the spectrum
     so the central wavelength position, the FWHM and other parameters are known
@@ -181,19 +182,26 @@ def retrieve_and_write_spectral_properties(source_name, molecule):
     peak_SNR = round(peak_signal_in_cube/average_noise_images,1)
 
     #### Obtain spectral properties from fitting a gaussian
-    spectrum, velocity = make_central_spectrum_data(source_name, molecule)
-    Tmb = round(np.nanmax(spectrum),3)
-    pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-30,30])
-    rounded_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
+    try:
+        spectrum, velocity = make_central_spectrum_data(source_name, molecule)
+        Tmb = round(np.nanmax(spectrum),4)
 
+        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-30,30] ,plot=plot)
+        rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
-    ### Get the integrated intensity from the spectrum
-    vmin = pos - 5*abs(sigma)
-    vmax = pos + 5*abs(sigma)
-    integrated_intensity_main_beam = integrate_flux_over_velocity(velocities=velocity, flux=spectrum,
-                                                                  v_min=vmin, v_max=vmax)
+        ### Get the integrated intensity from the spectrum
+        vmin = pos - 5*abs(sigma)
+        vmax = pos + 5*abs(sigma)
+        integrated_intensity_main_beam = integrate_flux_over_velocity(velocities=velocity, flux=spectrum,
+                                                                      v_min=vmin, v_max=vmax)
+    except ValueError as err:
+        print(f"Parameters for {source_name} and {molecule} was not produced.")
+        print(f"An error occurred: {err}")
 
-    plot=False
+        Tmb = 0.0
+        integrated_intensity_main_beam = 0.0
+        rounded_vel_pos, rounded_FHWM, rounded_sigma = 0.0,0.0,0.0
+
     if plot:
         print('the integrated intensity is ', integrated_intensity_main_beam)
         plt.plot(velocity,spectrum)
@@ -202,9 +210,15 @@ def retrieve_and_write_spectral_properties(source_name, molecule):
         plt.show()
 
 
-    values_to_text =[source_name,noise_level,Tmb, peak_SNR, rounded_pos, rounded_FHWM,
-                     rounded_sigma, integrated_intensity_main_beam, molecule]
-    write_or_update_values(file_name='spectrum_parameters_'+molecule+'.txt', new_values=values_to_text)
+    # Prepare the values for writing/updating
+    values_to_text = [
+        source_name, noise_level, Tmb, peak_SNR, rounded_vel_pos, rounded_FHWM,
+        rounded_sigma, integrated_intensity_main_beam, molecule
+    ]
+
+    # Call write_or_update_values to save the data
+    write_or_update_values(file_name='spectrum_parameters_' + molecule + '.txt', new_values=values_to_text)
+
 
 
 def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
@@ -224,6 +238,7 @@ def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
         pos = float(pos)
     except:
         pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-20,30],plot=False)
+
 
     plt.figure()
     # plt.title("Averaged Spectrum ("+mole_name+") @"+dir_each)
@@ -413,27 +428,57 @@ def mass_produce_spectral_plots(folder_fits, molecule):
             plot_spectrum(sources, molecule, type='fov', save=True, plot=False)
 
         except IndexError as err:
-            print(f"Map for {sources} was not produced. Check the moment maps.")
+            print(f"Spectral line for {sources} was not produced. Check the plots.")
             print(f"An error occurred: {err}")
 
         except Exception as e:
             print(f"An unexpected error occurred with {sources}: {e}")
 
+def mass_calculate_spectral_plots(folder_fits, molecule):
+    """
+    Processes all folders within 'folder_fits' to generate moment maps and spectra
+    for specified molecules (default is 'C18O').
+
+    Plot moment-zero map.
+
+    All operations are run in no-plotting mode, saving the maps.
+
+    Args:
+        folder_fits (str): Path to the main folder containing subfolders with fits data.
+        molecule (str): Name of the molecule to process ('HCO+' or 'C18O').
+    """
+    folder_list = sorted(next(os.walk(folder_fits))[1])  # List of subfolders
+    print("Folders found:", folder_list)
+
+    for sources in folder_list:
+        try:
+            # Check if the necessary file exists before running the function
+            filename = sources + '_' + molecule
+            fits_file_path = os.path.join(folder_fits, sources, f"{filename}.fits")
+            if not os.path.isfile(fits_file_path):
+                print(f"No such file: {fits_file_path}. Skipping this folder.")
+                continue  # Move to the next folder if the file doesn't exist
+
+            retrieve_and_write_spectral_properties(sources, molecule,plot=False)
+
+        except IndexError as err:
+            print(f"An error occurred: {err}")
+
+        except Exception as e:
+            print(f"An unexpected error occurred with {sources}: {e}")
 
 if __name__ == "__main__":
 
-    source_name = 'IRAS04489+3042'
+    source_name = 'UYAur'
     molecule ='HCO+'
     # molecule ='C18O'
-    ### Should slightly modify this so it tries with the given source name OR the name given here.
-    ### Even better I should have a list of the SIMBAD name for each of the sources, so I don't need to
-    ### input this one manually every time!
 
+    ## Step 0
     # retrieve_and_write_spectral_properties(source_name, molecule)
 
     ### Step 1 creates a plot of the spectrum
-    plot_spectrum(source_name, molecule,type='central',save=True)
-    plot_spectrum(source_name, molecule,type='fov',save=True)
+    # plot_spectrum(source_name, molecule,type='central',save=True)
+    # plot_spectrum(source_name, molecule,type='fov',save=True)
 
 
     ### Step 3
@@ -441,6 +486,7 @@ if __name__ == "__main__":
     # plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
 
     #### Mass produce moment maps
+    mass_calculate_spectral_plots('sdf_and_fits', molecule)
     # mass_produce_moment_maps('sdf_and_fits',molecule)
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
