@@ -118,7 +118,7 @@ def make_central_spectrum_data(source_name, molecule):
     Average spectrum of the central beam.
 
     """
-    simbad_name = find_simbad_source_in_file(file_name='names_to_simbad_names.txt', search_word=source_name)
+    simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
     skycoord_object = get_icrs_coordinates(simbad_name)
 
     filename = source_name+'_'+molecule
@@ -293,7 +293,7 @@ def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,p
 
     print('molecule ',data_cube.molecule)
     ### Here I can go from sky position to pixel coordinates
-    simbad_name = find_simbad_source_in_file(file_name='names_to_simbad_names.txt', search_word=source_name)
+    simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
     skycoord_object = get_icrs_coordinates(simbad_name)
 
 
@@ -321,7 +321,7 @@ def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,p
 
     ## Moment zero
     fig1 = plt.subplot(projection=moment_0.wcs)
-    mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower',vmax=0.5)
+    mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower')#,vmax=0.5)
     # divider = make_axes_locatable(fig1)
     # cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, label='Integrated Intensity (K * km/s)')
@@ -423,8 +423,8 @@ def mass_produce_spectral_plots(folder_fits, molecule):
 if __name__ == "__main__":
 
     source_name = 'IRAS04489+3042'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    molecule ='HCO+'
+    # molecule ='C18O'
     ### Should slightly modify this so it tries with the given source name OR the name given here.
     ### Even better I should have a list of the SIMBAD name for each of the sources, so I don't need to
     ### input this one manually every time!
@@ -432,13 +432,13 @@ if __name__ == "__main__":
     # retrieve_and_write_spectral_properties(source_name, molecule)
 
     ### Step 1 creates a plot of the spectrum
-    # plot_spectrum(source_name, molecule,type='central',save=True)
-    # plot_spectrum(source_name, molecule,type='fov',save=True)
+    plot_spectrum(source_name, molecule,type='central',save=True)
+    plot_spectrum(source_name, molecule,type='fov',save=True)
 
 
     ### Step 3
     ### Plot the maps
-    plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
+    # plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
 
     #### Mass produce moment maps
     # mass_produce_moment_maps('sdf_and_fits',molecule)

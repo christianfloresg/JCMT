@@ -79,6 +79,7 @@ if __name__ == "__main__":
     NII_values = N_II(t, lambda_SF, lambda_0, lambda_I, lambda_flat, lambda_II)
     Ntot = lambda_SF*t
     NIII_values = Ntot - N0_values - NI_values - Nflat_values - NII_values
-    # plot_star_formation_numbers()
-    # plot_star_formation_fraction()
+
+    plot_star_formation_numbers()
+    plot_star_formation_fraction()
     plot_star_formation_relative_fraction()
