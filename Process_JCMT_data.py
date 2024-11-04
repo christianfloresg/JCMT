@@ -120,10 +120,11 @@ def create_shell_script_moment_maps(path_to_folder,sdf_name,source_name,molec):
     file.write('SOURCENAME=$SOURCE"_"$MOLEC \n')
     file.write('RESAMP=$SOURCE"_"$MOLEC$RESA \n')
     # file.write('RESAMP=$SOURCE"_"$MOLEC \n')
+    file.write('convert \n')
     file.write('cdiv in=$INPUTNAME.sdf scalar=0.63 out=$SOURCENAME.sdf \n')
     file.write('setunits $SOURCENAME.sdf units=\"K km/s \" \n')
+    file.write('ndf2fits in=$SOURCENAME.sdf out=$SOURCENAME"_original".fits \n')
     file.write('sqorst in=$SOURCENAME.sdf out=$RESAMP.sdf factors="[6,6,1] conserve" \n')
-    file.write('convert \n')
     file.write('ndf2fits in=$RESAMP.sdf out=$RESAMP.fits \n')
     file.write('mkdir /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ '\n')
     file.write('mv $RESAMP.sdf /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ '\n')
@@ -241,21 +242,22 @@ def integrated_intensity(path, filename):
 if __name__ == "__main__":
 
     ### Step 1 source name
-    containing_folder='M22BP066'
-    source_name = 'IRAS05256+3049'
+    containing_folder='M22BH10B'
+    source_name = 'FPTau'
     molecule ='HCO+'
     fits_file_name=source_name+'_'+molecule #'V347_Aur_HCO+'
 
     ### Step 2
     # Get the shell script for moment map preparation
     path_to_folder=containing_folder+'/'+source_name+'/'+molecule+'/reduced/'
-    create_shell_script_moment_maps(path_to_folder,sdf_name='ga20220830_52_1_0p20bin001.sdf',
+    create_shell_script_moment_maps(path_to_folder,sdf_name='ga20220923_38_1_0p20bin001.sdf',
                                     source_name=source_name,molec=molecule)
     run_moment_map_shell_script(path_to_folder='.')
 
+
     ### Step 3
     ### run the BTS to create moment maps
-    BTS_param_file = create_moment_masking_parameterfile(source_name, fits_file_name)
-    run_BTS(BTS_param_file)
+    # BTS_param_file = create_moment_masking_parameterfile(source_name, fits_file_name)
+    # run_BTS(BTS_param_file)
 
 
