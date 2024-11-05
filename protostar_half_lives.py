@@ -25,43 +25,76 @@ def N_II(t, lambda_SF, lambda_0, lambda_I, lambda_flat, lambda_II):
     term5 = (lambda_0 * lambda_I * lambda_flat) / ((lambda_0 - lambda_II) * (lambda_I - lambda_II) * (lambda_flat - lambda_II)) * np.exp(-lambda_II * t)
     return term1*( term2 - term3 - term4 - term5)
 
-def plot_star_formation_numbers():
+def plot_star_formation_numbers(save=False):
 
-    plt.plot(t,N0_values,label='N0',lw=1)
-    plt.plot(t,NI_values,label='NI',lw=2)
-    plt.plot(t,Nflat_values,label='NFS',lw=3)
-    plt.plot(t,NII_values,label='NII')
-    plt.plot(t,NIII_values,label='NIII')
-    plt.plot(t,Ntot,label='Ntot',color='k')
+    fig = plt.figure(figsize=(7,6))
+    ax = fig.add_subplot(1, 1, 1)
+
+    ax.plot(t,N0_values,label='Class 0',lw=2)
+    ax.plot(t,NI_values,label='Class I',lw=2)
+    ax.plot(t,Nflat_values,label='Flat',lw=3)
+    ax.plot(t,NII_values,label='Class II',lw=3)
+    ax.plot(t,NIII_values,label='Class III',lw=3)
+    ax.plot(t,Ntot,label='Total',color='k',lw=3)
+
+    ax.tick_params(axis='both', which='major', labelsize=16)
+
+    ax.set_ylabel(r'Number of Stars', fontsize=18)
+    ax.set_xlabel('t (Myr)', fontsize=18)
+
 
     plt.legend()
     plt.yscale("log")
     plt.ylim(1e0,5e3)
+    plt.xlim(1e-2,5)
+
+    save_name = 'Star-Formation-Number.png'
+    if save:
+        plt.savefig(save_name, bbox_inches='tight', dpi=300, transparent=True)
     plt.show()
 
-def plot_star_formation_fraction():
+def plot_star_formation_fraction(save=False):
 
-    plt.plot(t,N0_values/Ntot,label='N0',lw=1)
-    plt.plot(t,NI_values/Ntot,label='NI',lw=2)
-    plt.plot(t,Nflat_values/Ntot,label='NFS',lw=3)
-    plt.plot(t,NII_values/Ntot,label='NII')
-    plt.plot(t,NIII_values/Ntot,label='NIII')
+    fig = plt.figure(figsize=(7,6))
+    ax = fig.add_subplot(1, 1, 1)
+
+    ax.plot(t,N0_values/Ntot,label='Class 0',lw=2)
+    ax.plot(t,NI_values/Ntot,label='Cass I',lw=2)
+    ax.plot(t,Nflat_values/Ntot,label='Flat',lw=3)
+    ax.plot(t,NII_values/Ntot,label='Class II',lw=2)
+    ax.plot(t,NIII_values/Ntot,label='Class III',lw=2)
     # plt.plot(t,Ntot,label='Ntot',color='k')
 
+    ax.tick_params(axis='both', which='major', labelsize=16)
+
+    ax.set_ylabel(r'Number of Stars', fontsize=18)
+    ax.set_xlabel('t (Myr)', fontsize=18)
+
+
     plt.legend()
+    save_name = 'Star-Formation-Fraction.png'
+    if save:
+        plt.savefig(save_name, bbox_inches='tight', dpi=300, transparent=True)
     # plt.yscale("log")
     # plt.ylim(1e0,5e3)
     plt.show()
-def plot_star_formation_relative_fraction():
+def plot_star_formation_relative_fraction(save=False):
 
-    plt.plot(t,Nflat_values/NI_values,label='Nflat/NI',lw=2)
-    plt.plot(t,NII_values/Nflat_values,label='NII/NFS',lw=3)
-    plt.plot(t,NII_values/NI_values,label='NII/NI',lw=2)
+    fig = plt.figure(figsize=(7,6))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(t,Nflat_values/NI_values,label='Flat/Class I',lw=2)
+    # ax.plot(t,NII_values/Nflat_values,label='NII/NFS',lw=3)
+    ax.plot(t,NII_values/NI_values,label='Class II/Class I',lw=2)
 
-    # plt.plot(t,Ntot,label='Ntot',color='k')
+    ax.tick_params(axis='both', which='major', labelsize=16)
+
+    ax.set_ylabel(r'Relative fraction', fontsize=18)
+    ax.set_xlabel('t (Myr)', fontsize=18)
+
     plt.legend()
-    # plt.yscale("log")
-    # plt.ylim(1e0,5e3)
+    save_name = 'Star-Formation-Relative-Fraction.png'
+    if save:
+        plt.savefig(save_name, bbox_inches='tight', dpi=300, transparent=True)
     plt.show()
 
 if __name__ == "__main__":
@@ -80,6 +113,6 @@ if __name__ == "__main__":
     Ntot = lambda_SF*t
     NIII_values = Ntot - N0_values - NI_values - Nflat_values - NII_values
 
-    plot_star_formation_numbers()
-    plot_star_formation_fraction()
-    plot_star_formation_relative_fraction()
+    # plot_star_formation_numbers(save=True)
+    # plot_star_formation_fraction(save=True)
+    plot_star_formation_relative_fraction(save=True)
