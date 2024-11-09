@@ -9,7 +9,44 @@ import seaborn as sns
 from astropy.visualization.wcsaxes import SphericalCircle
 from data_cube_analysis import fit_gaussian_to_spectrum, write_or_update_values\
     , calculate_peak_SNR, integrate_flux_over_velocity, fit_gaussian_2d, find_nearest_index
+from matplotlib.patches import Arc
 
+
+def create_alternating_circle(ax, skycoord_object, aperture_radius, num_segments=20):
+    """
+    Create a circular patch with alternating dark gray and white segments.
+
+    :param ax: The matplotlib Axes object
+    :param skycoord_object: SkyCoord object representing the center of the circle
+    :param aperture_radius: Radius of the circle in arcsec
+    :param num_segments: Number of segments to divide the circle into
+    """
+    # Calculate the angle for each segment
+    angle_per_segment = 360 / num_segments
+
+    # Define colors for alternating segments
+    colors = ['darkgray', 'white']
+
+    # Loop to create each segment of the circle
+    for i in range(num_segments):
+        # Set the start angle for each segment
+        theta_start = i * angle_per_segment
+        theta_end = theta_start + angle_per_segment
+
+        # Alternate the color for each segment
+        color = colors[i % 2]
+
+        # Create an arc segment
+        arc = Arc((skycoord_object.ra.degree, skycoord_object.dec.degree),
+                  width=aperture_radius.to(u.deg).value * 2,
+                  height=aperture_radius.to(u.deg).value * 2,
+                  theta1=theta_start, theta2=theta_end,
+                  edgecolor=color, linewidth=2, linestyle='--',
+                  transform=ax.get_transform('fk5'))
+
+        # Add the arc segment to the plot
+        # return arc
+        ax.add_patch(arc)
 
 def find_simbad_source_in_file(file_name, search_word):
     """
@@ -360,6 +397,12 @@ def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,p
     image_mom_0 = image_mom_0 * pix_per_beam
     # image_mom_0[image_mom_0 == 0] = np.nan
 
+
+    # Apply a threshold to mask large values
+    threshold = 7 * np.nanstd(image_mom_0)  # Adjust threshold factor if needed
+    image_mom_0[image_mom_0 > threshold] = np.nan
+
+
     peak = np.nanmax(image_mom_0)
     levels = np.array([0.2, 0.5, 0.8, 0.95])
     levels = levels * peak
@@ -379,10 +422,13 @@ def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,p
 
     if sky_cord_object:
         s = SphericalCircle(skycoord_object, aperture_radius * u.arcsec,
-                            edgecolor='white', facecolor='none',
-                            transform=fig1.get_transform('fk5'))
+                            edgecolor='darkgrey', facecolor='none',
+                            transform=fig1.get_transform('fk5'),linewidth=2,linestyle='--')
 
         fig1.add_patch(s)
+
+        # create_alternating_circle(fig1, skycoord_object, aperture_radius * u.arcsec)
+
 
     if save:
         plt.savefig(os.path.join('Figures/Moment_maps/',filename), bbox_inches='tight',dpi=300)
@@ -391,7 +437,7 @@ def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,p
     if plot:
         plt.show()
 
-    fit_gaussian_2d(image_mom_0,moment_0.wcs)
+    # fit_gaussian_2d(image_mom_0,moment_0.wcs)
 
 
 def mass_produce_moment_maps(folder_fits, molecule='C18O'):
@@ -500,7 +546,7 @@ def mass_calculate_spectral_plots(folder_fits, molecule):
 
 if __name__ == "__main__":
 
-    source_name = 'UYAur'
+    source_name = 'IRAS05379-0758'
     molecule ='HCO+'
     # molecule ='C18O'
 
@@ -514,10 +560,10 @@ if __name__ == "__main__":
 
     ### Step 3
     ### Plot the maps
-    # plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
+    plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
 
     #### Mass produce moment maps
-    mass_calculate_spectral_plots('sdf_and_fits', molecule)
+    # mass_calculate_spectral_plots('sdf_and_fits', molecule)
     # mass_produce_moment_maps('sdf_and_fits',molecule)
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
