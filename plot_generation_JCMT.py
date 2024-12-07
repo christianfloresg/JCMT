@@ -161,36 +161,44 @@ def make_central_spectrum_data(source_name, molecule):
     filename = source_name+'_'+molecule
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
 
+
     if 'HCO+' in data_cube.molecule:
-        aperture_radius = 7.05
+        aperture_radius = 7.05 ## This is in arcsec
 
     elif data_cube.molecule == 'C18O':
-        aperture_radius = 7.635
+        aperture_radius = 7.635 ## This is in arcsec
 
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
 
+    pixel_scale_ra = data_cube.header['CDELT1'] * 3600  # arcseconds per pixel
+    pixel_scale_dec = data_cube.header['CDELT2'] * 3600  # arcseconds per pixel
+    aperture_radius_pixels = abs(aperture_radius/pixel_scale_ra)
+
+    print(pixel_scale_ra,pixel_scale_dec)
+
     pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
+
     velocity = data_cube.vel
 
     # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
     x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
 
-    # print(x_center, y_center)
+    print(skycoord_object)
 
     # Initialize a list to store the pixel values within the aperture
     center_beam_values = []
 
     # Iterate over a square region, but filter by distance to make it circular
-    for xx in range(int(x_center - aperture_radius), int(x_center + aperture_radius) + 1):
-        for yy in range(int(y_center - aperture_radius), int(y_center + aperture_radius) + 1):
+    for xx in range(int(x_center - aperture_radius_pixels), int(x_center + aperture_radius_pixels) + 1):
+        for yy in range(int(y_center - aperture_radius_pixels), int(y_center + aperture_radius_pixels) + 1):
             # Calculate the distance from the center
             distance = np.sqrt((xx - x_center) ** 2 + (yy - y_center) ** 2)
 
             # Check if the distance is within the aperture radius
-            if distance <= aperture_radius:
+            if distance <= aperture_radius_pixels:
                 # Append the data at this pixel position
-                center_beam_values.append(data_cube.ppv_data[:, xx, yy])
+                center_beam_values.append(data_cube.ppv_data[:, yy, xx])
 
     # Convert center_beam_values to a NumPy array for easy manipulation
     center_beam_values = np.array(center_beam_values)
@@ -546,7 +554,7 @@ def mass_calculate_spectral_plots(folder_fits, molecule):
 
 if __name__ == "__main__":
 
-    source_name = 'IRAS05379-0758'
+    source_name = 'V347_Aur'
     molecule ='HCO+'
     # molecule ='C18O'
 
@@ -554,13 +562,13 @@ if __name__ == "__main__":
     # retrieve_and_write_spectral_properties(source_name, molecule)
 
     ### Step 1 creates a plot of the spectrum
-    # plot_spectrum(source_name, molecule,type='central',save=True)
+    plot_spectrum(source_name, molecule,type='central',save=False)
     # plot_spectrum(source_name, molecule,type='fov',save=True)
 
 
     ### Step 3
     ### Plot the maps
-    plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
+    # plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
 
     #### Mass produce moment maps
     # mass_calculate_spectral_plots('sdf_and_fits', molecule)
