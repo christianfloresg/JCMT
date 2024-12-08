@@ -115,7 +115,8 @@ def write_or_update_values(file_name, new_values):
         f"{new_values[7]:<15.3f}"  # FWHM with 3 decimal places in 10 bytes
         f"{new_values[8]:<15.3f}"  # Sigma with 3 decimal places in 10 bytes
         f"{new_values[9]:<15.3f}"  # Integrated intensity with 3 decimal places in 10 bytes
-        f"{new_values[10]:<15}"  # Molecule in 10 bytes
+        f"{new_values[10]:<15.3f}"  # Integrated intensity with 3 decimal places in 10 bytes
+        f"{new_values[11]:<15}"  # Molecule in 10 bytes
     )
 
     # Read the file if it exists, otherwise start with a header
@@ -135,7 +136,8 @@ def write_or_update_values(file_name, new_values):
             f"{'Velocity':<15}"
             f"{'FWHM ':<15}"
             f"{'Sigma':<15}"
-            f"{'Integ. Int .':<15}"
+            f"{'Integ. Int Beam.':<15}"
+            f"{'Integ. Int FOV.':<15}"
             f"{'Molecule':<15}\n"
         )
 
@@ -150,6 +152,7 @@ def write_or_update_values(file_name, new_values):
             f"{'(km/s)':<15}"
             f"{'(km/s)':<15}"
             f"{'(km/s)':<15}"
+            f"{'(K * km/s)':<15}"
             f"{'(K * km/s)':<15}"
             f"{' ':<15}\n"
         )

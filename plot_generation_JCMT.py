@@ -104,6 +104,7 @@ def find_word_in_file(file_name, search_word, position):
                 if parts[0] == search_word:
                     # Check if the requested position is within bounds
                     if position < len(parts):
+                        print(f"For source {line.split()[0]}, the central velocity is at {parts[position]}")
                         return parts[position]
                     else:
                         print(f"Error: The requested position {position} is out of bounds.")
@@ -267,6 +268,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
 
         Tmb = 0.0
         integrated_intensity_main_beam = 0.0
+        integrated_intensity_fov = 0.0
         rounded_vel_pos, rounded_FHWM, rounded_sigma = 0.0,0.0,0.0
         line_noise = 1.0
         line_SNR = 0.0
@@ -289,7 +291,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     # Prepare the values for writing/updating
     values_to_text = [
         source_name, image_noise_level, peak_SNR, line_noise, Tmb, line_SNR , rounded_vel_pos, rounded_FHWM,
-        rounded_sigma, integrated_intensity_main_beam, molecule
+        rounded_sigma, integrated_intensity_main_beam, integrated_intensity_fov, molecule
     ]
 
     # Call write_or_update_values to save the data
@@ -310,7 +312,7 @@ def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
 
     try:
         ### I first try to get the velocity centroid from the data saved in text file.
-        pos = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name, position=4)
+        pos = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name, position=6)
         pos = float(pos)
     except:
         pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-20,30],plot=False)
@@ -327,7 +329,7 @@ def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
     plt.tick_params(axis='both', direction='in')
     plt.xlim(pos - 10, pos+ 10)
     if save:
-        plt.savefig(os.path.join('Figures/Spectra/', 'spectrum_'+source_name+'_'+molecule+'_'+type), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/Spectra_new/', 'spectrum_'+source_name+'_'+molecule+'_'+type), bbox_inches='tight', dpi=300)
 
     if plot:
         plt.show()
@@ -562,7 +564,7 @@ if __name__ == "__main__":
     # retrieve_and_write_spectral_properties(source_name, molecule)
 
     ### Step 1 creates a plot of the spectrum
-    plot_spectrum(source_name, molecule,type='central',save=False)
+    # plot_spectrum(source_name, molecule,type='central',save=False)
     # plot_spectrum(source_name, molecule,type='fov',save=True)
 
 
@@ -571,7 +573,7 @@ if __name__ == "__main__":
     # plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
 
     #### Mass produce moment maps
-    # mass_calculate_spectral_plots('sdf_and_fits', molecule)
+    mass_calculate_spectral_plots('sdf_and_fits', molecule)
     # mass_produce_moment_maps('sdf_and_fits',molecule)
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
