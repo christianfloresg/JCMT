@@ -136,8 +136,8 @@ def write_or_update_values(file_name, new_values):
             f"{'Velocity':<15}"
             f"{'FWHM ':<15}"
             f"{'Sigma':<15}"
-            f"{'Integ. Int Beam.':<15}"
-            f"{'Integ. Int FOV.':<15}"
+            f"{'Integ. Beam.':<15}"
+            f"{'Integ. FOV.':<15}"
             f"{'Molecule':<15}\n"
         )
 

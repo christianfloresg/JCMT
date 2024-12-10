@@ -1,5 +1,5 @@
-## Source name           Image Noise    Peak Im. SNR   Line Noise     Tmb            Peak Line SNR  Velocity       FWHM           Sigma          Integ. Int .   Molecule       
-##                       (K)                           (K)            (K)                           (km/s)         (km/s)         (km/s)         (K * km/s)                    
+## Source name           Image Noise    Peak Im. SNR   Line Noise     Tmb            Peak Line SNR  Velocity       FWHM           Sigma          Integ. Beam.   Integ. FOV.    Molecule       
+##                       (K)                           (K)            (K)                           (km/s)         (km/s)         (km/s)         (K * km/s)     (K * km/s)                    
 DoAr25                   0.1685         31.2           0.0924         0.588          6.4            -7.346         1.020          0.433          0.572          0.614          C18O           
 GV_Tau                   0.3030         15.0           0.2355         3.508          14.9           6.329          0.652          0.277          2.751          1.305          C18O           
 IRAS03220+3035           0.0693         25.9           0.0409         0.354          8.6            9.795          0.997          0.423          0.313          0.551          C18O           

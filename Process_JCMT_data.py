@@ -246,8 +246,8 @@ if __name__ == "__main__":
     ### Step 1 source name
     containing_folder='M24AH15A'
     source_name = 'DG-Tau'
-    molecule ='HCO+'
-    # molecule ='C18O'
+    # molecule ='HCO+'
+    molecule ='C18O'
     fits_file_name=source_name+'_'+molecule #'V347_Aur_HCO+'
 
     ### Step 2

@@ -10,6 +10,7 @@ from astropy.visualization.wcsaxes import SphericalCircle
 from data_cube_analysis import fit_gaussian_to_spectrum, write_or_update_values\
     , calculate_peak_SNR, integrate_flux_over_velocity, fit_gaussian_2d, find_nearest_index
 from matplotlib.patches import Arc
+import bettermoments as bm
 
 
 def create_alternating_circle(ax, skycoord_object, aperture_radius, num_segments=20):
@@ -104,7 +105,7 @@ def find_word_in_file(file_name, search_word, position):
                 if parts[0] == search_word:
                     # Check if the requested position is within bounds
                     if position < len(parts):
-                        print(f"For source {line.split()[0]}, the central velocity is at {parts[position]}")
+                        print(f"For source {line.split()[0]}, the requested value is at {parts[position]}")
                         return parts[position]
                     else:
                         print(f"Error: The requested position {position} is out of bounds.")
@@ -242,6 +243,9 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[vmin_fov,vmax_fov] ,plot=plot)
         rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
+        filename = source_name + '_' + molecule  # 'V347_Aur_HCO+'
+        data_cube = DataAnalysis(os.path.join('sdf_and_fits', source_name), filename + '.fits')
+
         vmin = pos - 5*abs(sigma)
         vmax = pos + 5*abs(sigma)
 
@@ -352,19 +356,111 @@ def get_icrs_coordinates(object_name):
     ra = result_table['RA'][0]  # Right Ascension in HMS (hours, minutes, seconds)
     dec = result_table['DEC'][0]  # Declination in DMS (degrees, arcminutes, arcseconds)
 
+
     # Convert RA and DEC to a SkyCoord object in the ICRS frame
     coord = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg), frame='icrs')
-
+    # coord = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg), frame='fk5')
     # Return the ICRS coordinates in degrees
     return coord
 
 
-
-def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,plot=True):
+def moment_eight_map(source_name,molecule,use_sky_coord_object=False,save=False,plot=True):
     '''
-    Create moment maps using the python package bettermoments.
-    Currently only moment 0 and 8 work. Some unknown issues with the velocity
-    ones.
+    Creates either moment zero or eight map
+    :param path:
+    :param filename:
+    :param min_vel:
+    :param max_vel:
+    :param source_position:
+    :param moment_number:
+    :return:
+    '''
+
+    filename=source_name+'_'+molecule #'V347_Aur_HCO+'
+    data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
+    moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
+
+    # data, velax = bm.load_cube(os.path.join('sdf_and_fits',source_name), filename+'.fits')
+
+    print('molecule ',data_cube.molecule)
+    ### Here I can go from sky position to pixel coordinates
+    simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
+    skycoord_object = get_icrs_coordinates(simbad_name)
+
+
+    if 'HCO+' in data_cube.molecule:
+        aperture_radius = 7.05
+        cmap = sns.color_palette("YlOrBr",as_cmap=True)
+
+    elif data_cube.molecule == 'C18O':
+        aperture_radius = 7.635
+        cmap = sns.color_palette("YlGnBu",as_cmap=True)
+
+    else:
+        raise Exception("Sorry, I need to calculate such aperture radius")
+
+    pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
+
+    # data = data * pix_per_beam
+    # image_mom_0[image_mom_0 == 0] = np.nan
+
+
+
+    try:
+        ### I first try to get the velocity centroid from the data saved in text file.
+        noise_level = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
+                                        position=1)
+        float_noise_level = float(noise_level)
+
+        sigma_vel = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
+                                        position=8)
+        float_sigma_vel = float(sigma_vel)
+
+
+        moment_eight_noise_array = float_noise_level* np.array([5, 10, 20, 50, 100, 200])
+
+        veloc = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
+                                        position=6)
+
+        float_veloc = float(veloc)
+
+    except:
+        moment_eight_noise_array = np.array([0.2, 0.4, 0.8, 0.95])
+        print('I can not read the file with velocity and noise levels')*10
+
+    levels = moment_eight_noise_array
+
+    upper_idx= find_nearest_index(array=data_cube.vel, value=float_veloc-6*float_sigma_vel) # 6 sigma is for consistency with Carney
+    lower_idx= find_nearest_index(array=data_cube.vel,value=float_veloc+6*float_sigma_vel)
+
+
+    moment_eight = np.nanmax(data_cube.ppv_data[upper_idx:lower_idx,:,:],axis=0)*pix_per_beam
+
+    # moment = creates_moment_eighth_map(data,shortened_vel,smoothed_rms)
+    # projection = wcs, slices = (50, 'y', 'x')
+    fig1 = plt.subplot(projection=moment_0.wcs)
+    mom8_im = fig1.imshow(moment_eight, cmap=cmap, origin='lower')#,vmax=0.5)
+    cbar = plt.colorbar(mom8_im, fraction=0.048, pad=0.04, label='Peak Intensity (K)')
+    contour = fig1.contour(moment_eight, levels=levels, colors="black")
+    plt.clabel(contour, inline=True, fontsize=8, fmt='%1.2f')
+
+    fig1.set_xlabel('RA',size=12)
+    fig1.set_ylabel('DEC',size=12)
+
+    plt.show()
+
+
+def create_moment_eight_map(data,velocity,rms):
+
+    moments = bm.collapse_eighth(velax=velocity, data=data, rms=rms)
+    return moments
+
+
+
+
+def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,save=False,plot=True):
+    '''
+    Create moment maps using BTS coode.
     Need to give the data, velocity, and rms levels.
     The moment maps will be computed using a given velocity position
     previously calculated and a velocity dispersion given from gaussian fit.
@@ -413,9 +509,31 @@ def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,p
     image_mom_0[image_mom_0 > threshold] = np.nan
 
 
-    peak = np.nanmax(image_mom_0)
-    levels = np.array([0.2, 0.5, 0.8, 0.95])
-    levels = levels * peak
+    try:
+        ### I first try to get the velocity centroid from the data saved in text file.
+        noise_level = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
+                                        position=1)
+
+        float_noise_level = float(noise_level)
+
+        sigma_vel = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
+                                        position=8)
+
+        float_sigma_vel = float(sigma_vel)
+
+        moment_zero_noise = (0.2*4*float_sigma_vel)**0.5*float_noise_level ## 0.2 is the binning in km/s
+
+        moment_zero_noise_array = moment_zero_noise* np.array([3, 5,10,20,50])
+        # print(noise_level)
+        # print(sigma_vel)
+        # print (moment_zero_noise)
+    except:
+        moment_zero_noise_array = np.array([0.2, 0.4, 0.8, 0.95])
+
+    levels = moment_zero_noise_array
+    # peak = np.nanmax(image_mom_0)
+    # levels = np.array([0.2, 0.4, 0.8, 0.95])
+    # levels = levels * peak
 
 
     ## Moment zero
@@ -425,29 +543,42 @@ def plot_moment_zero_map(source_name,molecule,sky_cord_object=False,save=False,p
     # cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, label='Integrated Intensity (K * km/s)')
     contour = fig1.contour(image_mom_0, levels=levels, colors="black")
-    # plt.clabel(contour, inline=True, fontsize=8)
+    plt.clabel(contour, inline=True, fontsize=8, fmt='%1.2f')
 
     fig1.set_xlabel('RA',size=12)
     fig1.set_ylabel('DEC',size=12)
 
-    if sky_cord_object:
-        s = SphericalCircle(skycoord_object, aperture_radius * u.arcsec,
-                            edgecolor='darkgrey', facecolor='none',
-                            transform=fig1.get_transform('fk5'),linewidth=2,linestyle='--')
+    print(skycoord_object)
+
+    # u.hourangle, u.deg
+
+    if use_sky_coord_object:
+        ra_center = skycoord_object.ra.degree
+        dec_center = skycoord_object.dec.degree
+        print(skycoord_object.to_string('hmsdms'))
+        print(ra_center)
+        print(dec_center)
+        IR_position = fig1.scatter(x=ra_center,y=dec_center, s=200, c='gray', transform=fig1.get_transform('icrs'), marker='x',
+                                clip_on=False)
+
+
+        ra_offset = 60/3600
+        dec_offset = 45/3600
+        beam_sky_coord_object = SkyCoord(ra=ra_center+ra_offset, dec=dec_center-dec_offset, unit=(u.deg, u.deg), frame='icrs')
+        s = SphericalCircle(beam_sky_coord_object, aperture_radius * u.arcsec,
+                            edgecolor='white', facecolor='gray',
+                            transform=fig1.get_transform('fk5'),linewidth=2,linestyle='-')
 
         fig1.add_patch(s)
 
-        # create_alternating_circle(fig1, skycoord_object, aperture_radius * u.arcsec)
-
 
     if save:
-        plt.savefig(os.path.join('Figures/Moment_maps/',filename), bbox_inches='tight',dpi=300)
+        plt.savefig(os.path.join('Figures/new_Moment_maps/',filename+'_new'), bbox_inches='tight',dpi=300)
         # plt.savefig(os.path.join('Figures',filename+'_transparent'), bbox_inches='tight', transparent=True)
 
     if plot:
         plt.show()
 
-    # fit_gaussian_2d(image_mom_0,moment_0.wcs)
 
 
 def mass_produce_moment_maps(folder_fits, molecule='C18O'):
@@ -476,7 +607,7 @@ def mass_produce_moment_maps(folder_fits, molecule='C18O'):
                 continue  # Move to the next folder if the file doesn't exist
 
             # Generate the moment-zero map
-            plot_moment_zero_map(sources, molecule, save=True, sky_cord_object=True, plot=False)
+            plot_moment_zero_map(sources, molecule, save=True, use_sky_coord_object=True, plot=False)
 
         except IndexError as err:
             print(f"Map for {sources} was not produced. Check the moment maps.")
@@ -570,10 +701,11 @@ if __name__ == "__main__":
 
     ### Step 3
     ### Plot the maps
-    # plot_moment_zero_map(source_name,molecule,save=True,sky_cord_object=True,plot=True)
+    # plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True)
 
     #### Mass produce moment maps
-    mass_calculate_spectral_plots('sdf_and_fits', molecule)
+    # mass_calculate_spectral_plots('sdf_and_fits', molecule)
     # mass_produce_moment_maps('sdf_and_fits',molecule)
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
+    moment_eight_map(source_name,molecule,save=False,use_sky_coord_object=True,plot=True)
