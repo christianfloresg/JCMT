@@ -92,11 +92,15 @@ def find_word_in_file(file_name, search_word, position):
     :param position: The index of the word in the line to return (0-based)
     :return: The word at the specified position if the word is found, otherwise prints a message
     """
+
+    header = []
     try:
         with open(file_name, 'r') as file:
             for line in file:
                 # Skip lines starting with '#' or that are empty
                 if line.startswith("#") or not line.strip():
+                    header.append(line.split())
+                    # print(header)
                     continue
 
                 # Split the line into words
@@ -105,7 +109,8 @@ def find_word_in_file(file_name, search_word, position):
                 if parts[0] == search_word:
                     # Check if the requested position is within bounds
                     if position < len(parts):
-                        print(f"For source {line.split()[0]}, the requested value is at {parts[position]}")
+                        print(f"For source {line.split()[0]}, the value of "
+                              f"{header[0][position+1]} is {parts[position]} {header[1][position+1]}")
                         return parts[position]
                     else:
                         print(f"Error: The requested position {position} is out of bounds.")
@@ -363,24 +368,11 @@ def get_icrs_coordinates(object_name):
     # Return the ICRS coordinates in degrees
     return coord
 
-
-def moment_eight_map(source_name,molecule,use_sky_coord_object=False,save=False,plot=True):
-    '''
-    Creates either moment zero or eight map
-    :param path:
-    :param filename:
-    :param min_vel:
-    :param max_vel:
-    :param source_position:
-    :param moment_number:
-    :return:
-    '''
+def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=False,plot=True):
 
     filename=source_name+'_'+molecule #'V347_Aur_HCO+'
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
     moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
-
-    # data, velax = bm.load_cube(os.path.join('sdf_and_fits',source_name), filename+'.fits')
 
     print('molecule ',data_cube.molecule)
     ### Here I can go from sky position to pixel coordinates
@@ -399,30 +391,14 @@ def moment_eight_map(source_name,molecule,use_sky_coord_object=False,save=False,
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
 
-    pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
-
-    # data = data * pix_per_beam
-    # image_mom_0[image_mom_0 == 0] = np.nan
-
-
-
     try:
         ### I first try to get the velocity centroid from the data saved in text file.
         noise_level = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
                                         position=1)
         float_noise_level = float(noise_level)
 
-        sigma_vel = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
-                                        position=8)
-        float_sigma_vel = float(sigma_vel)
 
-
-        moment_eight_noise_array = float_noise_level* np.array([5, 10, 20, 50, 100, 200])
-
-        veloc = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
-                                        position=6)
-
-        float_veloc = float(veloc)
+        moment_eight_noise_array = float_noise_level* np.array([5, 10, 15, 30, 60, 120])
 
     except:
         moment_eight_noise_array = np.array([0.2, 0.4, 0.8, 0.95])
@@ -430,14 +406,9 @@ def moment_eight_map(source_name,molecule,use_sky_coord_object=False,save=False,
 
     levels = moment_eight_noise_array
 
-    upper_idx= find_nearest_index(array=data_cube.vel, value=float_veloc-6*float_sigma_vel) # 6 sigma is for consistency with Carney
-    lower_idx= find_nearest_index(array=data_cube.vel,value=float_veloc+6*float_sigma_vel)
+    moment_eight = create_moment_eight_map(source_name, molecule)
 
 
-    moment_eight = np.nanmax(data_cube.ppv_data[upper_idx:lower_idx,:,:],axis=0)*pix_per_beam
-
-    # moment = creates_moment_eighth_map(data,shortened_vel,smoothed_rms)
-    # projection = wcs, slices = (50, 'y', 'x')
     fig1 = plt.subplot(projection=moment_0.wcs)
     mom8_im = fig1.imshow(moment_eight, cmap=cmap, origin='lower')#,vmax=0.5)
     cbar = plt.colorbar(mom8_im, fraction=0.048, pad=0.04, label='Peak Intensity (K)')
@@ -446,17 +417,149 @@ def moment_eight_map(source_name,molecule,use_sky_coord_object=False,save=False,
 
     fig1.set_xlabel('RA',size=12)
     fig1.set_ylabel('DEC',size=12)
+    fig1.set_title('moment 8 '+source_name ,size=14)
+    if use_sky_coord_object:
+        ra_center = skycoord_object.ra.degree
+        dec_center = skycoord_object.dec.degree
+        print(skycoord_object.to_string('hmsdms'))
+        print(ra_center)
+        print(dec_center)
+        IR_position = fig1.scatter(x=ra_center,y=dec_center, s=200, c='gray', transform=fig1.get_transform('icrs'), marker='x',
+                                clip_on=False)
+
+
+        ra_offset = 60/3600
+        dec_offset = 45/3600
+        beam_sky_coord_object = SkyCoord(ra=ra_center+ra_offset, dec=dec_center-dec_offset, unit=(u.deg, u.deg), frame='icrs')
+        s = SphericalCircle(beam_sky_coord_object, aperture_radius * u.arcsec,
+                            edgecolor='white', facecolor='gray',
+                            transform=fig1.get_transform('fk5'),linewidth=2,linestyle='-')
+
+        fig1.add_patch(s)
+
 
     plt.show()
 
 
-def create_moment_eight_map(data,velocity,rms):
+def create_moment_eight_map(source_name,molecule):
+    '''
+    Creates either moment zero or eight map
+    :param path:
+    :param filename:
+    :param min_vel:
+    :param max_vel:
+    :param source_position:
+    :param moment_number:
+    :return:
+    '''
 
-    moments = bm.collapse_eighth(velax=velocity, data=data, rms=rms)
-    return moments
+    filename=source_name+'_'+molecule #'V347_Aur_HCO+'
+    data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
+    # moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
+
+    # data, velax = bm.load_cube(os.path.join('sdf_and_fits',source_name), filename+'.fits')
+
+    if 'HCO+' in data_cube.molecule:
+        aperture_radius = 7.05
+        # cmap = sns.color_palette("YlOrBr",as_cmap=True)
+
+    elif data_cube.molecule == 'C18O':
+        aperture_radius = 7.635
+        # cmap = sns.color_palette("YlGnBu",as_cmap=True)
+
+    else:
+        raise Exception("Sorry, I need to calculate such aperture radius")
+
+    pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
 
 
+    try:
+        ### I first try to get the velocity centroid from the data saved in text file.
 
+        sigma_vel = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
+                                        position=8)
+        float_sigma_vel = float(sigma_vel)
+
+
+        veloc = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name,
+                                        position=6)
+
+        float_veloc = float(veloc)
+
+    except:
+        # moment_eight_noise_array = np.array([0.2, 0.4, 0.8, 0.95])
+        print('I can not read the file with velocity and noise levels')*10
+
+    # levels = moment_eight_noise_array
+
+    upper_idx= find_nearest_index(array=data_cube.vel, value=float_veloc-6*float_sigma_vel) # 6 sigma is for consistency with Carney
+    lower_idx= find_nearest_index(array=data_cube.vel,value=float_veloc+6*float_sigma_vel)
+
+
+    moment_eight = np.nanmax(data_cube.ppv_data[upper_idx:lower_idx,:,:],axis=0)*pix_per_beam
+
+    return moment_eight
+
+
+def peak_temperature_from_map(source_name, molecule):
+    '''
+    Find the peak temperature within the moment 8 map. This
+    is equivalent of finding the peak integrated intensity
+    within the map.
+    :param source_name:
+    :param molecule:
+    :return:
+    '''
+
+    filename = source_name+'_'+molecule
+    data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
+
+    moment_eight = create_moment_eight_map(source_name, molecule)
+
+    simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
+    skycoord_object = get_icrs_coordinates(simbad_name)
+
+
+    if 'HCO+' in data_cube.molecule:
+        aperture_radius = 7.05 ## This is in arcsec
+
+    elif data_cube.molecule == 'C18O':
+        aperture_radius = 7.635 ## This is in arcsec
+
+    else:
+        raise Exception("Sorry, I need to calculate such aperture radius")
+
+    pixel_scale_ra = data_cube.header['CDELT1'] * 3600  # arcseconds per pixel
+    aperture_radius_pixels = abs(aperture_radius/pixel_scale_ra)
+
+
+    # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
+    x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
+
+    print(skycoord_object)
+
+    # Initialize a list to store the pixel values within the aperture
+    center_beam_values = []
+
+    # Iterate over a square region, but filter by distance to make it circular
+    for xx in range(int(x_center - aperture_radius_pixels), int(x_center + aperture_radius_pixels) + 1):
+        for yy in range(int(y_center - aperture_radius_pixels), int(y_center + aperture_radius_pixels) + 1):
+            # Calculate the distance from the center
+            distance = np.sqrt((xx - x_center) ** 2 + (yy - y_center) ** 2)
+
+            # Check if the distance is within the aperture radius
+            if distance <= aperture_radius_pixels:
+                # Append the data at this pixel position
+                center_beam_values.append(moment_eight[yy, xx])
+
+    # Convert center_beam_values to a NumPy array for easy manipulation
+    center_beam_values = np.array(center_beam_values)
+
+    peak_temperature = np.nanmax(center_beam_values)
+
+    print('peak temperature within central beam: ',peak_temperature, ' K')
+
+    return peak_temperature
 
 def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,save=False,plot=True):
     '''
@@ -687,7 +790,7 @@ def mass_calculate_spectral_plots(folder_fits, molecule):
 
 if __name__ == "__main__":
 
-    source_name = 'V347_Aur'
+    source_name = 'IRAS63'
     molecule ='HCO+'
     # molecule ='C18O'
 
@@ -708,4 +811,5 @@ if __name__ == "__main__":
     # mass_produce_moment_maps('sdf_and_fits',molecule)
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
-    moment_eight_map(source_name,molecule,save=False,use_sky_coord_object=True,plot=True)
+    peak_temperature_from_map(source_name, molecule)
+    plot_moment_eight_map(source_name,molecule,save=False)
