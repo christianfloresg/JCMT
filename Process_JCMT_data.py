@@ -4,6 +4,7 @@ import os
 import subprocess
 import shutil
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import difflib
 
 #Astropy modules to deal with coordinates
 from astropy.wcs import WCS
@@ -45,7 +46,8 @@ class DataAnalysis:
         self.nx = self.header['NAXIS1']
         self.ny = self.header['NAXIS2']
 
-        self.cdelt_ra = self.header['CDELT1'] * 3600
+        self.cdelt_ra = self.header['CDELT1'] * 3600 ## pixel size in arcsec
+        self.cdelt_dec = self.header['CDELT2'] * 3600 ## pixel size in arcsec
 
 
 
@@ -127,7 +129,7 @@ def create_shell_script_moment_maps(path_to_folder,sdf_name,source_name,molec):
     file.write('cdiv in=$INPUTNAME.sdf scalar=0.63 out=$SOURCENAME.sdf \n')
     file.write('setunits $SOURCENAME.sdf units=\"K km/s \" \n')
     file.write('ndf2fits in=$SOURCENAME.sdf out=$SOURCENAME"_original".fits \n')
-    file.write('sqorst in=$SOURCENAME.sdf out=$RESAMP.sdf factors="[6,6,1] conserve" \n')
+    file.write('sqorst in=$SOURCENAME.sdf out=$RESAMP.sdf factors="[4,4,1]" \n')
     file.write('ndf2fits in=$RESAMP.sdf out=$RESAMP.fits \n')
     file.write('mkdir /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ '\n')
     file.write('mv $RESAMP.sdf /Users/christianflores/Documents/GitHub/JCMT/sdf_and_fits/'+source_name+ '\n')
@@ -136,6 +138,35 @@ def create_shell_script_moment_maps(path_to_folder,sdf_name,source_name,molec):
     file.write('mv $RESAMP.sdf $SOURCENAME.sdf \n')
     file.write('mv $RESAMP.fits $SOURCENAME.fits \n')
     file.close()
+
+
+def find_approximate_file(directory, target_name, similarity_threshold=0.6):
+    """
+    Search for files in a directory with names approximately matching the target name.
+
+    Args:
+        directory (str): The directory to search in.
+        target_name (str): The target file name to search for.
+        similarity_threshold (float): Minimum similarity ratio (0 to 1) to consider a match.
+
+    Returns:
+        list: A list of file names with similarity above the threshold.
+    """
+    matching_files = []
+
+    # List all files in the directory
+    for file_name in os.listdir(directory):
+        # Compare file_name with target_name
+        similarity = difflib.SequenceMatcher(None, target_name, file_name).ratio()
+        if similarity >= similarity_threshold:
+            matching_files.append((file_name, similarity))
+
+    # Sort by similarity, descending
+    matching_files.sort(key=lambda x: x[1], reverse=True)
+    print('The matching file is: ',matching_files[0][0])
+    print('The name accuracy was: ',matching_files[0][1])
+    return matching_files[0][0]
+
 
 def run_moment_map_shell_script(path_to_folder):
     """
@@ -246,21 +277,24 @@ if __name__ == "__main__":
     ### Step 1 source name
     containing_folder='M24AH15A'
     source_name = 'DG-Tau'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    molecule ='HCO+'
+    # molecule ='C18O'
     fits_file_name=source_name+'_'+molecule #'V347_Aur_HCO+'
 
     ### Step 2
     # Get the shell script for moment map preparation
     path_to_folder=containing_folder+'/'+source_name+'/'+molecule+'/reduced/'
-    create_shell_script_moment_maps(path_to_folder,sdf_name='ga20240919_40_1_0p20bin001.sdf',
+    full_path_for_sdf= os.path.join('/Users/christianflores/Documents/work/Astronomy_data/JCMT',path_to_folder)
+
+    sdf_file_name= find_approximate_file(full_path_for_sdf, target_name='ga20_0p20bin001.sdf', similarity_threshold=0.6)
+
+    create_shell_script_moment_maps(path_to_folder,sdf_name=sdf_file_name,
                                     source_name=source_name,molec=molecule)
     run_moment_map_shell_script(path_to_folder='.')
 
-
     ### Step 3
     ### run the BTS to create moment maps
-    # BTS_param_file = create_moment_masking_parameterfile(source_name, fits_file_name)
-    # run_BTS(BTS_param_file)
+    BTS_param_file = create_moment_masking_parameterfile(source_name, fits_file_name)
+    run_BTS(BTS_param_file)
 
 

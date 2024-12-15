@@ -24,20 +24,7 @@ def calculate_peak_SNR(filename,source_name, velo_limits=[2, 10], separate=False
     print('molecule ',data_cube.molecule)
     ### Here I can go from sky position to pixel coordinates
 
-
-    if 'HCO+' in data_cube.molecule:
-        aperture_radius = 7.05
-
-    elif data_cube.molecule == 'C18O':
-        aperture_radius = 7.635
-
-    else:
-        raise Exception("Sorry, I need to calculate such aperture radius")
-
-
-    pix_per_beam = aperture_radius**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
-
-    image = data_cube.ppv_data*pix_per_beam
+    image = data_cube.ppv_data
 
     val_down, val_up = velo_limits[0], velo_limits[1]
     # lower_idx, upper_idx = closest_idx(velocity, val_down), closest_idx(velocity, val_up)
@@ -126,35 +113,35 @@ def write_or_update_values(file_name, new_values):
     except FileNotFoundError:
         # If the file doesn't exist, start with a formatted header line
         header = (
-            f"{'## Source name':<17}"
+            f"{'## SourceMame':<17}"
             f"{'':<8}"  # 8 bytes of white space
-            f"{'Image Noise':<15}"
-            f"{'Peak Im. SNR':<15}"
-            f"{'Line Noise':<15}"
+            f"{'ImageNoise':<15}"
+            f"{'PeakIm.SNR':<15}"
+            f"{'LineNoise':<15}"
             f"{'Tmb ':<15}"
-            f"{'Peak Line SNR':<15}"
+            f"{'PeakLineSNR':<15}"
             f"{'Velocity':<15}"
             f"{'FWHM ':<15}"
             f"{'Sigma':<15}"
-            f"{'Integ. Beam.':<15}"
-            f"{'Integ. FOV.':<15}"
+            f"{'Integ.Beam.':<15}"
+            f"{'Integ.FOV.':<15}"
             f"{'Molecule':<15}\n"
         )
 
         header2 = (
             f"{'## ':<17}"
-            f"{'':<8}"  # 8 bytes of white space
+            f"{'-':<8}"  # 8 bytes of white space
             f"{'(K)':<15}"
-            f"{' ':<15}"
+            f"{'-':<15}"
             f"{'(K)':<15}"
             f"{'(K)':<15}"
-            f"{' ':<15}"
+            f"{'-':<15}"
             f"{'(km/s)':<15}"
             f"{'(km/s)':<15}"
             f"{'(km/s)':<15}"
             f"{'(K * km/s)':<15}"
             f"{'(K * km/s)':<15}"
-            f"{' ':<15}\n"
+            f"{'-':<15}\n"
         )
         lines = [header,header2]
 
