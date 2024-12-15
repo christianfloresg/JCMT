@@ -50,7 +50,7 @@ def plot_images_grid(image_dir, grid_shape=(5, 6), output_file=None):
     plt.subplots_adjust(wspace=0.005, hspace=0.005)  # Reduce horizontal and vertical spacing
 
     if output_file:
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        plt.savefig(output_file+'_'+molecule+'.png', dpi=300, bbox_inches='tight')
         print(f"Grid plot saved to {output_file}.")
     else:
         plt.show()
@@ -60,4 +60,4 @@ if __name__ == "__main__":
     image_directory = "./Figures/Moment_maps/C18O/"  # Replace with the directory containing your .png files
     grid_shape = (5, 5)  # Grid of 5 rows and 6 columns
 
-    plot_images_grid(image_directory,  grid_shape, output_file="grid_plot_C18O.png")
+    plot_images_grid(image_directory,  grid_shape, output_file="./Figures/grid_plot")
