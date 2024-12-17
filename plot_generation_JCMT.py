@@ -175,7 +175,6 @@ def make_central_spectrum_data(source_name, molecule):
     pixel_scale_dec = data_cube.header['CDELT2'] * 3600  # arcseconds per pixel
     aperture_radius_pixels = abs(aperture_radius/pixel_scale_ra)
 
-    print(pixel_scale_ra,pixel_scale_dec)
 
 
     velocity = data_cube.vel
@@ -183,7 +182,7 @@ def make_central_spectrum_data(source_name, molecule):
     # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
     x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
 
-    print(skycoord_object)
+    print(f"These are the sky coordinates of your {source_name}: ", skycoord_object)
 
     # Initialize a list to store the pixel values within the aperture
     center_beam_values = []
@@ -280,7 +279,6 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     image_noise_level = round(average_noise_images,4)
     peak_SNR = round(peak_signal_in_cube/average_noise_images,1)
 
-
     if plot:
         print('the integrated intensity is ', integrated_intensity_main_beam)
         plt.plot(velocity,spectrum)
@@ -292,8 +290,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     # Prepare the values for writing/updating
     values_to_text = [
         source_name, image_noise_level, peak_SNR, line_noise, Tmb, line_SNR , rounded_vel_pos, rounded_FHWM,
-        rounded_sigma, integrated_intensity_main_beam, integrated_intensity_fov, molecule
-    ]
+        rounded_sigma, integrated_intensity_main_beam, integrated_intensity_fov, molecule]
 
     # Call write_or_update_values to save the data
     write_or_update_values(file_name='spectrum_parameters_' + molecule + '.txt', new_values=values_to_text)
@@ -330,7 +327,7 @@ def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
     plt.tick_params(axis='both', direction='in')
     plt.xlim(pos - 10, pos+ 10)
     if save:
-        plt.savefig(os.path.join('Figures/Spectra_new/', 'spectrum_'+source_name+'_'+molecule+'_'+type), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/Spectra/', 'spectrum_'+source_name+'_'+molecule+'_'+type), bbox_inches='tight', dpi=300)
 
     if plot:
         plt.show()
@@ -379,7 +376,7 @@ def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=Fa
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
     moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
 
-    print('molecule ',data_cube.molecule)
+    print('molecule" ',data_cube.molecule)
     ### Here I can go from sky position to pixel coordinates
     simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
     skycoord_object = get_icrs_coordinates(simbad_name)
@@ -427,8 +424,6 @@ def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=Fa
         ra_center = skycoord_object.ra.degree
         dec_center = skycoord_object.dec.degree
         print(skycoord_object.to_string('hmsdms'))
-        print(ra_center)
-        print(dec_center)
         IR_position = fig1.scatter(x=ra_center,y=dec_center, s=200, c='gray', transform=fig1.get_transform('icrs'), marker='x',
                                 clip_on=False)
 
@@ -494,7 +489,7 @@ def create_moment_eight_map(source_name,molecule):
 
 def peak_temperature_from_map(source_name, molecule):
     '''
-    Find the peak temperature within the moment 8 map. This
+    Find the peak temperature within the moment zero map. This
     is equivalent of finding the peak integrated intensity
     within the map.
     :param source_name:
@@ -505,7 +500,8 @@ def peak_temperature_from_map(source_name, molecule):
     filename = source_name+'_'+molecule
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
 
-    moment_eight = create_moment_eight_map(source_name, molecule)
+    # moment_eight = create_moment_eight_map(source_name, molecule)
+    moment_eight = create_moment_zero_map(source_name, molecule)
 
     simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
     skycoord_object = get_icrs_coordinates(simbad_name)
@@ -527,7 +523,7 @@ def peak_temperature_from_map(source_name, molecule):
     # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
     x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
 
-    print(skycoord_object)
+    print(f"These are the sky coordinates of your {source_name}: ", skycoord_object)
 
     # Initialize a list to store the pixel values within the aperture
     center_beam_values = []
@@ -552,7 +548,7 @@ def peak_temperature_from_map(source_name, molecule):
 
     return peak_temperature
 
-def area_of_map_above_threshold(source_name,molecule,n_sigma=1):
+def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot=True):
     '''
     Computes the area of a map of all the emission
     above a given sigma noise level.
@@ -605,26 +601,26 @@ def area_of_map_above_threshold(source_name,molecule,n_sigma=1):
 
     n_pixels_interest = np.count_nonzero(~np.isnan(image_mom_0))
     print('number of no-nan pixels: ',n_pixels_interest)
-    print('size of array ',data_cube.ny*data_cube.nx)
+    print('size of array: ',data_cube.ny*data_cube.nx)
 
     pixel_area_arcsec2 = data_cube.cdelt_ra*data_cube.cdelt_dec
     area_of_significant_emission = abs(pixel_area_arcsec2*n_pixels_interest)
-    print('Total area of  array ', abs(pixel_area_arcsec2*data_cube.ny*data_cube.nx),' in squared arcsec')
-    print('Area of significant values ', area_of_significant_emission,' in squared arcsec')
+    print('Total area of  array: ', abs(pixel_area_arcsec2*data_cube.ny*data_cube.nx),' in squared arcsec')
+    print('Area of significant values: ', area_of_significant_emission,' in squared arcsec')
 
     pix_per_beam = (2*aperture_radius)**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
 
-    print('Pixels per beam ', pix_per_beam)
-    print('Pixels per beam ', (aperture_radius)**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2))
+    print('Pixels per beam: ', pix_per_beam)
 
     total_emission = np.nansum(image_mom_0/pix_per_beam)
 
     print('Noise of the map:', moment_zero_noise, ' K')
     print('Total integrated emission:', total_emission,' K km/s')
 
-    plt.imshow(image_mom_0,origin='lower')
-    plt.show()
-    return area_of_significant_emission
+    if plot:
+        plt.imshow(image_mom_0,origin='lower')
+        plt.show()
+    return area_of_significant_emission, total_emission
 
 
 def create_moment_zero_map(source_name,molecule):
@@ -647,7 +643,7 @@ def create_moment_zero_map(source_name,molecule):
 
     return image_mom_0
 
-def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,save=False,plot=True):
+def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,clip_outlier_sigma=7,save=False,plot=True):
     '''
     Create moment maps using BTS coode.
     Need to give the data, velocity, and rms levels.
@@ -669,7 +665,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,save=Fa
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
     moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
 
-    print('molecule ',data_cube.molecule)
+    print('molecule: ',data_cube.molecule)
     ### Here I can go from sky position to pixel coordinates
     simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
     skycoord_object = get_icrs_coordinates(simbad_name)
@@ -690,8 +686,9 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,save=Fa
 
 
     # Apply a threshold to mask large values
-    threshold = 7 * np.nanstd(image_mom_0)  # Adjust threshold factor if needed
-    # image_mom_0[image_mom_0 > threshold] = np.nan
+    if clip_outlier_sigma:
+        threshold = clip_outlier_sigma * np.nanstd(image_mom_0)  # Adjust threshold factor if needed
+        image_mom_0[image_mom_0 > threshold] = np.nan
 
 
     try:
@@ -729,7 +726,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,save=Fa
     fig1.set_xlabel('RA',size=12)
     fig1.set_ylabel('DEC',size=12)
 
-    print(skycoord_object)
+    print('These are the sky coordinates of your object: ',skycoord_object)
 
     # u.hourangle, u.deg
 
@@ -737,8 +734,6 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,save=Fa
         ra_center = skycoord_object.ra.degree
         dec_center = skycoord_object.dec.degree
         print(skycoord_object.to_string('hmsdms'))
-        print(ra_center)
-        print(dec_center)
         IR_position = fig1.scatter(x=ra_center,y=dec_center, s=200, c='gray', transform=fig1.get_transform('icrs'), marker='x',
                                 clip_on=False)
 
@@ -833,7 +828,7 @@ def mass_produce_spectral_plots(folder_fits, molecule):
         except Exception as e:
             print(f"An unexpected error occurred with {sources}: {e}")
 
-def mass_calculate_spectral_plots(folder_fits, molecule):
+def mass_calculate_spectral_properties(folder_fits, molecule):
     """
     Processes all folders within 'folder_fits' to generate moment maps and spectra
     for specified molecules (default is 'C18O').
@@ -866,28 +861,31 @@ def mass_calculate_spectral_plots(folder_fits, molecule):
         except Exception as e:
             print(f"An unexpected error occurred with {sources}: {e}")
 
+
 if __name__ == "__main__":
 
-    source_name = 'Elia33'
+    source_name = 'IRAS04489+3042'
     molecule ='HCO+'
     # molecule ='C18O'
 
     ## Step 0
-    # retrieve_and_write_spectral_properties(source_name, molecule)
+    retrieve_and_write_spectral_properties(source_name, molecule)
 
     ### Step 1 creates a plot of the spectrum
-    # plot_spectrum(source_name, molecule,type='central',save=False)
+    # plot_spectrum(source_name, molecule,type='central',save=True)
     # plot_spectrum(source_name, molecule,type='fov',save=False)
 
     ### Step 3
     ### Plot the maps
-    # area_of_map_above_threshold(source_name, molecule, n_sigma=3)
+    # area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=3)
     # plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True)
 
     #### Mass produce moment maps
-    # mass_calculate_spectral_plots('sdf_and_fits', molecule)
-    mass_produce_moment_maps('sdf_and_fits',molecule)
+    # mass_calculate_spectral_properties('sdf_and_fits', molecule)
+    # mass_produce_moment_maps('sdf_and_fits',molecule)
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
     # peak_temperature_from_map(source_name, molecule)
     # plot_moment_eight_map(source_name,molecule,save=False)
+    # calculate_concentration_factor(source_name, molecule, n_sigma=1)
+    # save_concentration_factors_to_file(folder_fits='sdf_and_fits', molecule=molecule,save_filename='concentrations_'+molecule+'.txt')
