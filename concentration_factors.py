@@ -2,6 +2,8 @@ from plot_generation_JCMT import *
 import numbers
 import math
 from scipy import stats
+import astropy.units as u
+
 
 def calculate_concentration_factor(source_name, molecule, n_sigma=3):
     '''
@@ -25,7 +27,7 @@ def calculate_concentration_factor(source_name, molecule, n_sigma=3):
 
     beam_size = np.pi/(4*np.log(2)) * (2 * aperture_radius)**2
     peak_temp = peak_temperature_from_map(source_name, molecule)
-    area , integrated_emission =area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma,plot=False)
+    area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma,plot=False)
     concentration = 1 - beam_size / area * integrated_emission / peak_temp
     rounded_concentration = round(concentration,3)
     print(f"For {source_name}, the concentration factor is {rounded_concentration}")
@@ -99,30 +101,116 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
             print(f"An unexpected error occurred with {sources}: {e}")
 
 def read_parameters(filename):
-    our_data = np.genfromtxt(filename, skip_header=1, skip_footer=0, )
+    # our_data = np.genfromtxt(filename, skip_header=1, skip_footer=0, )
+
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()  # Remove leading/trailing whitespace
+            if not line.startswith('#'):
+                num_columns = len(line.split())
+                continue
+
+        # header = f.readline()#.strip()  # Read the first line
+        # num_columns = len(header.split())  # Count the number of columns based on delimiter
+    print('number of cols', num_columns)
+    dtype = [('col1', 'U20')] + [(f'col{i+2}', 'f8') for i in range(num_columns - 1)]
+
+    our_data = np.genfromtxt(filename, dtype=dtype,
+                     delimiter=None, encoding='utf-8', comments='#')
+
+    # Access specific columns
+    # first_column = our_data['col1']  # String column
+    # remaining_columns = [our_data[f'col{i+2}'] for i in range(num_columns - 1)]  # Numerical columns
+
+
+    star_name = our_data['col1']
+
     # print Obs_data
-    Temp_values = our_data[:, 1]
-    temp_uncertainty = our_data[:, 2], our_data[:, 3]
-    logg_values = our_data[:, 4]
-    logg_uncertainty = our_data[:, 5], our_data[:, 6]
+    Temp_values = our_data['col2']
+    temp_uncertainty = our_data['col3'], our_data['col4']
+    logg_values = our_data['col5']
+    logg_uncertainty = our_data['col6'], our_data['col7']
 
-    vsini_values = our_data[:, 16]
-    vsini_uncertainty = our_data[:, 17], our_data[:, 18]
+    vsini_values = our_data['col17']
+    vsini_uncertainty = our_data['col18'], our_data['col19']
 
-    bfield_values = our_data[:, 13]
-    bfield_uncertainty = our_data[:, 14], our_data[:, 15]
+    bfield_values = our_data['col14']
+    bfield_uncertainty = our_data['col15'], our_data['col16']
 
-    ir_index_values = our_data[:, 19]
+    ir_index_values = our_data['col20']
 
-    HCO_data = our_data[:, 20]
-    C18O_data = our_data[:, 21]
+    HCO_data = our_data['col21']
+    C18O_data = our_data['col22']
 
-    # file_with_name = np.genfromtxt(filename, skip_header=1, skip_footer=0, dtype='string')
-    # star_name = file_with_name[:, 0]
-    star_name = our_data[:, 0]
 
     return Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
            vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name
+
+
+def read_map_parameters(filename):
+
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()  # Remove leading/trailing whitespace
+            if not line.startswith('#'):
+                num_columns = len(line.split())
+                continue
+
+        # header = f.readline()#.strip()  # Read the first line
+        # num_columns = len(header.split())  # Count the number of columns based on delimiter
+    print('number of cols', num_columns)
+    dtype = [('col1', 'U20')] + [(f'col{i+2}', 'f8') for i in range(num_columns - 1)]
+
+
+    our_data = np.genfromtxt(filename, dtype=dtype,
+                     delimiter=None, encoding='utf-8', comments='#')
+
+    star_name = our_data['col1']#our_data[:, 0]
+    T_mb = our_data['col5']#our_data[:, 4]
+    S_peak = our_data['col10']#our_data[:, 9]
+    S_area = our_data['col11']#our_data[:, 10]
+
+    return T_mb,S_peak,S_area, star_name
+
+
+
+def plot_spectral_vs_map_parameters(spectrum_file,map_file,molecule='HCO+',save=False):
+    '''
+    Plot parameters related to the star against parameters related to the maps
+    :param spectrum_file:
+    :param map_file:
+    :param molecule:
+    :param save:
+    :return:
+    '''
+
+    Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
+    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(spectrum_file)
+
+    T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
+
+    for ii in range(len(star_name)):
+        for jj in range(len(star_name_map)):
+            if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
+                print(star_name[ii], star_name_map[jj])
+                # plt.scatter(logg_values[ii]/100., S_peak[jj], color='red', edgecolor='k', s=100)
+                plt.scatter(logg_values[ii]/100., S_area[jj], color='orange', edgecolor='k', s=100)
+                # plt.scatter(logg_values[ii]/100., T_mb[jj], color='blue', edgecolor='k', s=100)
+
+    # Add labels and title
+    plt.xlabel('Gravity', fontsize=14)
+    # plt.ylabel('Integrated Intensity Main Beam (K km/s)', fontsize=14)
+    plt.ylabel('Integrated Intensity FOV (K km/s)', fontsize=14)
+    # plt.ylabel('Peak Temperature (K)', fontsize=14)
+
+    plt.title(molecule, fontsize=16)
+    plt.grid(True, linestyle='--', alpha=0.6)
+
+    # Show the plot
+    plt.tight_layout()
+    if save:
+        plt.savefig(os.path.join('Figures/stellar_vs_gas/', molecule+'_gravity_vs_integrated_intensity_FOV.png'), bbox_inches='tight', dpi=300)
+    plt.show()
 
 
 def plot_gravity_vs_spectral_index(filename, color_map='viridis', molecule='HCO+',save=False):
@@ -205,20 +293,23 @@ def plot_parameters(filename,molecule,save=False):
     # plt.ylabel('Concentration factor', fontsize=14)
 
 
-    plt.scatter(logg_values,molecule_data, edgecolor='k', s=100,c='C1')
-    plt.xlabel('Gravity', fontsize=14)
-    plt.ylabel('Concentration factor', fontsize=14)
+    plt.scatter(HCO_data,C18O_data, edgecolor='k', s=100,c='C1')
+    plt.xlabel('HCO+ concentration', fontsize=14)
+    plt.ylabel('C18O concentration', fontsize=14)
 
     # plt.title('Gravity vs Spectral Index', fontsize=16)
     plt.grid(True, linestyle='--', alpha=0.6)
 
-    # plt.ylim(-2,1)
-
+    one_to_one = np.linspace(0,1,10)
+    plt.plot(one_to_one,one_to_one,'k--',label='')
+    plt.ylim(-0.2,1)
+    plt.xlim(0,1)
+    #
     # Show the plot
     plt.tight_layout()
 
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule+'_concentration_factor_2_parameters_gravity.png'), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/concentration/', molecule+'_comparing_both_concentrations.png'), bbox_inches='tight', dpi=300)
     plt.show()
 
 def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
@@ -226,14 +317,17 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
     vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
 
+    T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
+
+    print(star_name)
+
     logg_values =logg_values/100.
     if molecule=='HCO+':
         # Check that all input arrays have the same length
         if len(logg_values) != len(ir_index_values) or len(logg_values) != len(HCO_data):
             raise ValueError("All input arrays must have the same length.")
-        is_numeric = [not math.isnan(x) for x in HCO_data]
-        is_nan = [math.isnan(x) for x in HCO_data]
-
+        is_numeric = [not math.isnan(x) and x>0.4 for x in HCO_data]
+        is_nan = [math.isnan(x) or x<0.4 for x in HCO_data]
         # molecular_data=HCO_data
         # min_val= -2
 
@@ -242,8 +336,10 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
         if len(logg_values) != len(ir_index_values) or len(logg_values) != len(C18O_data):
             raise ValueError("All input arrays must have the same length.")
 
-        is_numeric = [not math.isnan(x) for x in C18O_data]
-        is_nan = [math.isnan(x) for x in C18O_data]
+        is_numeric = [not math.isnan(x) and x>0.4 for x in C18O_data]
+        is_nan = [math.isnan(x) or x<0.4 for x in C18O_data]
+        # is_numeric = [not math.isnan(x) for x in C18O_data]
+        # is_nan = [math.isnan(x) for x in C18O_data]
         # molecular_data=C18O_data
         # min_val= -1
 
@@ -279,7 +375,7 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
     plt.legend(loc='upper left')
     plt.title(molecule)
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule + '_histogram_'+parameter+'.png'),
+        plt.savefig(os.path.join('Figures/concentration/', molecule + '_histogram_C04'+parameter+'.png'),
                     bbox_inches='tight', dpi=300)
     plt.show()
 
@@ -296,5 +392,12 @@ if __name__ == "__main__":
     # plot_gravity_vs_spectral_index(filename='text_files/Class_I_for-JCMT-plots.txt', color_map='viridis',
     #                                molecule=molecule,save=True)
 
-    make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='ir_index',
-                                   molecule=molecule,save=True)
+    # make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='ir_index',
+    #                                molecule=molecule,save=True)
+
+    make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
+                                   molecule=molecule,save=False)
+
+
+    # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
+    #                                 map_file='spectrum_parameters_'+molecule+'.txt',molecule=molecule,save=True)
