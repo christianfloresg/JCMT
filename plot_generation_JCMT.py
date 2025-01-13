@@ -10,7 +10,7 @@ from astropy.visualization.wcsaxes import SphericalCircle
 from data_cube_analysis import fit_gaussian_to_spectrum, write_or_update_values\
     , calculate_peak_SNR, integrate_flux_over_velocity, fit_gaussian_2d, find_nearest_index
 from matplotlib.patches import Arc
-import bettermoments as bm
+import matplotlib.ticker as tkr
 
 
 def create_alternating_circle(ax, skycoord_object, aperture_radius, num_segments=20):
@@ -410,16 +410,18 @@ def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=Fa
 
     moment_eight = create_moment_eight_map(source_name, molecule)
 
-
+    plt.figure(figsize=(6, 7))
     fig1 = plt.subplot(projection=moment_0.wcs)
-    mom8_im = fig1.imshow(moment_eight, cmap=cmap, origin='lower')#,vmax=0.5)
-    cbar = plt.colorbar(mom8_im, fraction=0.048, pad=0.04, label='Peak Intensity (K)')
-    contour = fig1.contour(moment_eight, levels=levels, colors="black")
-    plt.clabel(contour, inline=True, fontsize=8, fmt='%1.2f')
 
-    fig1.set_xlabel('RA',size=12)
-    fig1.set_ylabel('DEC',size=12)
-    fig1.set_title('moment 8 '+source_name ,size=14)
+    mom8_im = fig1.imshow(moment_eight, cmap=cmap, origin='lower')#,vmax=0.5)
+    cbar = plt.colorbar(mom8_im, fraction=0.048, pad=0.04, label='Peak Intensity (K)',
+                        format=tkr.FormatStrFormatter('%1.1f'))
+    contour = fig1.contour(moment_eight, levels=levels, colors="black")
+    plt.clabel(contour, inline=True, fontsize=8, fmt='%1.1f')
+
+
+    offset_coordinates(fig1,skycoord_object)
+
     if use_sky_coord_object:
         ra_center = skycoord_object.ra.degree
         dec_center = skycoord_object.dec.degree
@@ -428,17 +430,58 @@ def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=Fa
                                 clip_on=False)
 
 
-        ra_offset = 60/3600
+        ra_offset = 50/3600
         dec_offset = 45/3600
         beam_sky_coord_object = SkyCoord(ra=ra_center+ra_offset, dec=dec_center-dec_offset, unit=(u.deg, u.deg), frame='icrs')
+
         s = SphericalCircle(beam_sky_coord_object, aperture_radius * u.arcsec,
                             edgecolor='white', facecolor='gray',
                             transform=fig1.get_transform('fk5'),linewidth=2,linestyle='-')
 
         fig1.add_patch(s)
 
+    plt.axis('square')
 
-    plt.show()
+    if save:
+        plt.savefig(os.path.join('Figures/Moment_maps/moment-eight/'+molecule+'/',filename+'_relative_coord'), bbox_inches='tight',dpi=300)
+        # plt.savefig(os.path.join('Figures',filename+'_transparent'), bbox_inches='tight', transparent=True)
+
+    if plot:
+        plt.show()
+
+
+def offset_coordinates(ax,skycoord_object):
+    ra = ax.coords['ra']
+    ra.set_auto_axislabel(False)
+    dec = ax.coords['dec']
+    # ra.set_coord_type('longitude', 180)
+    overlay = ax.get_coords_overlay(skycoord_object.skyoffset_frame())
+    ra.set_ticklabel_visible(False)
+    dec.set_ticklabel_visible(False)
+    ra.set_ticks_visible(False)
+    dec.set_ticks_visible(False)
+
+    lon = overlay['lon']
+    # lon.set_coord_type('longitude', 180)
+    lon.set_format_unit(u.arcsec)
+    # lon.set_ticklabel(rotation=, pad=2)
+    lon.set_ticks_position('b')
+    lon.set_ticklabel_position('b')
+    lon.set_axislabel_position('b')
+    lon.set_ticks(spacing=30. * u.arcsec)
+
+    lat = overlay['lat']
+    lat.set_format_unit(u.arcsec)
+    lat.set_ticklabel()
+    lat.set_ticks_position('l')
+    lat.set_ticklabel_position('l')
+    lat.set_axislabel_position('l')
+
+    # lon.set_axislabel(r'$\Delta$RA',size=12)
+    # lat.set_axislabel(r'$\Delta$DEC',size=12)
+
+    lat.set_axislabel(text=' ')
+    lon.set_axislabel(text=' ')
 
 
 def create_moment_eight_map(source_name,molecule):
@@ -457,7 +500,6 @@ def create_moment_eight_map(source_name,molecule):
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
     # moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
 
-    # data, velax = bm.load_cube(os.path.join('sdf_and_fits',source_name), filename+'.fits')
 
     try:
         ### I first try to get the velocity centroid from the data saved in text file.
@@ -643,7 +685,7 @@ def create_moment_zero_map(source_name,molecule):
 
     return image_mom_0
 
-def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,clip_outlier_sigma=7,save=False,plot=True):
+def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percentile_outlier=100,save=False,plot=True):
     '''
     Create moment maps using BTS coode.
     Need to give the data, velocity, and rms levels.
@@ -686,8 +728,9 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,clip_ou
 
 
     # Apply a threshold to mask large values
-    if clip_outlier_sigma:
-        threshold = clip_outlier_sigma * np.nanstd(image_mom_0)  # Adjust threshold factor if needed
+    if percentile_outlier:
+        threshold = np.nanpercentile(image_mom_0.reshape(-1), percentile_outlier)
+        percentile_outlier_text = formatted_string = str(percentile_outlier).replace('.', 'p')
         image_mom_0[image_mom_0 > threshold] = np.nan
 
 
@@ -719,12 +762,17 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,clip_ou
     mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower')#,vmax=0.5)
     # divider = make_axes_locatable(fig1)
     # cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, label='Integrated Intensity (K * km/s)')
+    cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, format='%.2f')
+    cbar.set_label(label='Integrated Intensity ' +r'(K km s$^{-1}$)', size=14)
+
     contour = fig1.contour(image_mom_0, levels=levels, colors="black")
     plt.clabel(contour, inline=True, fontsize=8, fmt='%1.2f')
 
     fig1.set_xlabel('RA',size=12)
     fig1.set_ylabel('DEC',size=12)
+
+    offset_coordinates(fig1,skycoord_object)
+
 
     print('These are the sky coordinates of your object: ',skycoord_object)
 
@@ -738,7 +786,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,clip_ou
                                 clip_on=False)
 
 
-        ra_offset = 60/3600
+        ra_offset = 45/3600
         dec_offset = 45/3600
         beam_sky_coord_object = SkyCoord(ra=ra_center+ra_offset, dec=dec_center-dec_offset, unit=(u.deg, u.deg), frame='icrs')
         s = SphericalCircle(beam_sky_coord_object, aperture_radius * u.arcsec,
@@ -747,9 +795,11 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,clip_ou
 
         fig1.add_patch(s)
 
+    plt.axis('square')
 
     if save:
-        plt.savefig(os.path.join('Figures/Moment_maps/',filename+'_new'), bbox_inches='tight',dpi=300)
+        plt.savefig(os.path.join('Figures/Moment_maps/moment-zero/',
+                                 filename+'clip_'+percentile_outlier_text+'_coord_offset'), bbox_inches='tight',dpi=300)
         # plt.savefig(os.path.join('Figures',filename+'_transparent'), bbox_inches='tight', transparent=True)
 
     if plot:
@@ -773,6 +823,7 @@ def mass_produce_moment_maps(folder_fits, molecule='C18O'):
     folder_list = sorted(next(os.walk(folder_fits))[1])  # List of subfolders
     print("Folders found:", folder_list)
 
+    print(folder_list)
     for sources in folder_list:
         try:
             # Check if the necessary file exists before running the function
@@ -784,6 +835,9 @@ def mass_produce_moment_maps(folder_fits, molecule='C18O'):
 
             # Generate the moment-zero map
             plot_moment_zero_map(sources, molecule, save=True, use_sky_coord_object=True, plot=False)
+
+            # Generate the moment-eight map
+            # plot_moment_eight_map(sources, molecule, save=True, plot=True)
 
         except IndexError as err:
             print(f"Map for {sources} was not produced. Check the moment maps.")
@@ -864,12 +918,14 @@ def mass_calculate_spectral_properties(folder_fits, molecule):
 
 if __name__ == "__main__":
 
-    source_name = 'IRAS04489+3042'
-    molecule ='HCO+'
-    # molecule ='C18O'
+    source_name = 'DG-Tau'
+    # source_name = 'V347_Aur'
+
+    # molecule ='HCO+'
+    molecule ='C18O'
 
     ## Step 0
-    retrieve_and_write_spectral_properties(source_name, molecule)
+    # retrieve_and_write_spectral_properties(source_name, molecule)
 
     ### Step 1 creates a plot of the spectrum
     # plot_spectrum(source_name, molecule,type='central',save=True)
@@ -878,7 +934,8 @@ if __name__ == "__main__":
     ### Step 3
     ### Plot the maps
     # area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=3)
-    # plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True)
+    plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True,percentile_outlier=100)
+    # plot_moment_eight_map(source_name,molecule,save=True)
 
     #### Mass produce moment maps
     # mass_calculate_spectral_properties('sdf_and_fits', molecule)
@@ -886,6 +943,5 @@ if __name__ == "__main__":
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
     # peak_temperature_from_map(source_name, molecule)
-    # plot_moment_eight_map(source_name,molecule,save=False)
     # calculate_concentration_factor(source_name, molecule, n_sigma=1)
     # save_concentration_factors_to_file(folder_fits='sdf_and_fits', molecule=molecule,save_filename='concentrations_'+molecule+'.txt')

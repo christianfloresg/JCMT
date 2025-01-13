@@ -3,7 +3,27 @@ import numbers
 import math
 from scipy import stats
 import astropy.units as u
+import difflib
 
+
+def are_names_approximate(name1, name2, threshold=0.8):
+    """
+    Compare two names and return True if they are approximately the same,
+    based on a similarity threshold.
+
+    Args:
+        name1 (str): The first name to compare.
+        name2 (str): The second name to compare.
+        threshold (float): The similarity threshold (default is 0.8).
+
+    Returns:
+        bool: True if the names are approximately the same, False otherwise.
+    """
+    # Calculate similarity ratio using difflib's SequenceMatcher
+    similarity = difflib.SequenceMatcher(None, name1, name2).ratio()
+
+    # Return True if similarity exceeds the threshold
+    return similarity >= threshold
 
 def calculate_concentration_factor(source_name, molecule, n_sigma=3):
     '''
@@ -173,6 +193,30 @@ def read_map_parameters(filename):
     return T_mb,S_peak,S_area, star_name
 
 
+def read_ir_index_parameters(filename):
+
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()  # Remove leading/trailing whitespace
+            if not line.startswith('#'):
+                num_columns = len(line.split())
+                continue
+
+        # header = f.readline()#.strip()  # Read the first line
+        # num_columns = len(header.split())  # Count the number of columns based on delimiter
+    print('number of cols', num_columns)
+    dtype = [('col1', 'U20')] + [(f'col{i+2}', 'f8') for i in range(num_columns - 1)]
+
+
+    our_data = np.genfromtxt(filename, dtype=dtype,
+                     delimiter=None, encoding='utf-8', comments='#')
+
+    star_name = our_data['col1']#our_data[:, 0]
+    ir_index = our_data['col2']#our_data[:, 4]
+    corrected_ir_index = our_data['col3']#our_data[:, 9]
+
+
+    return ir_index, corrected_ir_index, star_name
 
 def plot_spectral_vs_map_parameters(spectrum_file,map_file,molecule='HCO+',save=False):
     '''
@@ -312,16 +356,88 @@ def plot_parameters(filename,molecule,save=False):
         plt.savefig(os.path.join('Figures/concentration/', molecule+'_comparing_both_concentrations.png'), bbox_inches='tight', dpi=300)
     plt.show()
 
+def make_histogram_several_files(filename, map_file, ir_file, molecule='HCO+',save=False):
+
+    Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
+    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
+
+    logg_values =logg_values/100.
+
+    T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
+
+    ir_index, ir_corrected_values, star_name_map = read_ir_index_parameters(ir_file)
+
+    protostars_parameter =[]
+    not_protostar_parameter=[]
+    counted_source = []
+
+    for ii in range(len(star_name)):
+        for jj in range(len(star_name_map)):
+            if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
+                counted_source.append(ii)
+                if HCO_data[ii]>0.4 and not math.isnan(HCO_data[ii]):# and S_peak[jj]>0.4:
+                    # protostars_parameter.append(logg_values[ii])
+                    print (ir_index[jj])
+                    # protostars_parameter.append(ir_corrected_values[jj])
+                    protostars_parameter.append(ir_index[jj])
+
+                    print(star_name[ii], star_name_map[jj])
+
+                    # print(star_name[ii])
+
+                else:
+                    # not_protostar_parameter.append(logg_values[ii])
+                    # not_protostar_parameter.append(ir_corrected_values[jj])
+                    not_protostar_parameter.append(ir_index[jj])
+
+        if ii not in counted_source:
+            # not_protostar_parameter.append(logg_values[ii])
+            # not_protostar_parameter.append(ir_corrected_values[jj])
+            not_protostar_parameter.append(ir_index[jj])
+
+    res= stats.ttest_ind(protostars_parameter, not_protostar_parameter, equal_var=False)
+    print(res)
+    # x_label =' Gravity'
+    # bins = np.arange(2.8, 4.0, 0.2)
+
+    x_label ='ir index'
+    bins = np.arange(-1.25, 1.5, 0.25)
+    x_leg, y_leg = 0.4, 5
+
+    mean_val_1 = round(np.nanmean(protostars_parameter), 3)
+    std_val_1 = round(np.nanstd(protostars_parameter), 3)
+
+    mean_val_2 = round(np.nanmean(not_protostar_parameter), 3)
+    std_val_2 = round(np.nanstd(not_protostar_parameter), 3)
+
+    plt.text(x=x_leg, y=y_leg, s=r'$\mu$ = ' + str(mean_val_1) + r' $\sigma$ = ' + str(std_val_1), size=12, color='C0',
+             weight=600)
+    plt.text(x=x_leg, y=y_leg - 1, s=r'$\mu$ = ' + str(mean_val_2) + r' $\sigma$ = ' + str(std_val_2), size=12,
+             color='C1', weight=600)
+
+
+    # plt.hist(protostars_parameter,bins,alpha=0.7, label='detections', edgecolor="C0", histtype='step',lw=2)
+    plt.hist(protostars_parameter,bins,alpha=0.7, label='detections', edgecolor="black")
+    # plt.hist(not_protostar_parameter,bins,alpha=0.7, label='non-detections', histtype='step',edgecolor="C1",lw=2)
+    plt.hist(not_protostar_parameter,bins,alpha=0.7, label='non-detections', edgecolor="black")
+    plt.xlabel(x_label,size=14)
+    plt.legend(loc='upper left')
+    plt.title(molecule)
+
+    if save:
+        plt.savefig(os.path.join('Figures/concentration/', molecule + '_histogram_C04_and_int_above04_edge_ir_index.png'),
+                    bbox_inches='tight', dpi=300)
+    plt.show()
+
+
 def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
     vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
 
-    T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
-
-    print(star_name)
-
     logg_values =logg_values/100.
+
+
     if molecule=='HCO+':
         # Check that all input arrays have the same length
         if len(logg_values) != len(ir_index_values) or len(logg_values) != len(HCO_data):
@@ -366,10 +482,10 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
     mean_val_2 = round(np.nanmean(my_parameter[is_nan]),3)
     std_val_2 = round(np.nanstd(my_parameter[is_nan]),3)
 
-
-    plt.hist(my_parameter[is_numeric],bins,alpha=0.7, label='detections', edgecolor="black")
     plt.text(x=x_leg,y=y_leg,s=r'$\mu$ = '+str(mean_val_1) +r' $\sigma$ = '+str(std_val_1),size=12,color='C0',weight=600)
     plt.text(x=x_leg,y=y_leg-1,s=r'$\mu$ = '+str(mean_val_2) +r' $\sigma$ = '+str(std_val_2),size=12,color='C1',weight=600)
+
+    plt.hist(my_parameter[is_numeric],bins,alpha=0.7, label='detections', edgecolor="black")
     plt.hist(my_parameter[is_nan],bins,alpha=0.7, label='non-detections', edgecolor="black")
     plt.xlabel(x_label,size=14)
     plt.legend(loc='upper left')
@@ -382,8 +498,8 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 if __name__ == "__main__":
 
     source_name = 'V347_Aur'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    molecule ='HCO+'
+    # molecule ='C18O'
 
     # calculate_concentration_factor(source_name, molecule, n_sigma=1)
     # save_concentration_factors_to_file(folder_fits='sdf_and_fits', molecule=molecule,save_filename='concentrations_'+molecule+'.txt')
@@ -395,9 +511,12 @@ if __name__ == "__main__":
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='ir_index',
     #                                molecule=molecule,save=True)
 
-    make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
-                                   molecule=molecule,save=False)
+    # make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
+    #                                molecule=molecule,save=False)
 
+    make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt'
+                                 , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
+                                 molecule='HCO+', save=True)
 
     # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
     #                                 map_file='spectrum_parameters_'+molecule+'.txt',molecule=molecule,save=True)

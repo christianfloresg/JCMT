@@ -1,0 +1,5 @@
+|  id         |       dec     |        ra     |best|     size|
+|  char       |    double     |    double     |char|   double|
+|             |       deg     |       deg     |    |   arcsec|
+|   null      |      null     |      null     |null|     null|
+ V347 Aur       74.237589583    51.514134444    y    120      
