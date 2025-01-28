@@ -365,7 +365,7 @@ def make_histogram_several_files(filename, map_file, ir_file, molecule='HCO+',sa
 
     T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
 
-    ir_index, ir_corrected_values, star_name_map = read_ir_index_parameters(ir_file)
+    # ir_index, ir_corrected_values, star_name_map = read_ir_index_parameters(ir_file)
 
     protostars_parameter =[]
     not_protostar_parameter=[]
@@ -375,34 +375,42 @@ def make_histogram_several_files(filename, map_file, ir_file, molecule='HCO+',sa
         for jj in range(len(star_name_map)):
             if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
                 counted_source.append(ii)
-                if HCO_data[ii]>0.4 and not math.isnan(HCO_data[ii]):# and S_peak[jj]>0.4:
-                    # protostars_parameter.append(logg_values[ii])
-                    print (ir_index[jj])
-                    # protostars_parameter.append(ir_corrected_values[jj])
-                    protostars_parameter.append(ir_index[jj])
+                if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.35:
+                # if not math.isnan(HCO_data[ii]) and S_peak[jj] > 0.35:
 
-                    print(star_name[ii], star_name_map[jj])
+                    protostars_parameter.append(logg_values[ii])
+                    # print (ir_index[jj])
+                    # protostars_parameter.append(ir_corrected_values[jj])
+                    # protostars_parameter.append(ir_index[jj])
+
+                    print('Detections',star_name[ii])
+                    # print()
 
                     # print(star_name[ii])
 
                 else:
-                    # not_protostar_parameter.append(logg_values[ii])
+                    not_protostar_parameter.append(logg_values[ii])
                     # not_protostar_parameter.append(ir_corrected_values[jj])
-                    not_protostar_parameter.append(ir_index[jj])
+                    # not_protostar_parameter.append(ir_index[jj])
+
+                    print('NOOOOO detections',star_name[ii])
+                    # print()
 
         if ii not in counted_source:
-            # not_protostar_parameter.append(logg_values[ii])
+            not_protostar_parameter.append(logg_values[ii])
             # not_protostar_parameter.append(ir_corrected_values[jj])
-            not_protostar_parameter.append(ir_index[jj])
+            # not_protostar_parameter.append(ir_index[jj])
 
     res= stats.ttest_ind(protostars_parameter, not_protostar_parameter, equal_var=False)
     print(res)
-    # x_label =' Gravity'
-    # bins = np.arange(2.8, 4.0, 0.2)
+    x_label =' Gravity'
+    bins = np.arange(2.8, 4.0, 0.2)
 
-    x_label ='ir index'
-    bins = np.arange(-1.25, 1.5, 0.25)
-    x_leg, y_leg = 0.4, 5
+    # x_label ='ir index'
+    # bins = np.arange(-1.25, 1.5, 0.25)
+
+    x_leg, y_leg = 2.8, 6
+    # x_leg, y_leg = 0.4, 5
 
     mean_val_1 = round(np.nanmean(protostars_parameter), 3)
     std_val_1 = round(np.nanstd(protostars_parameter), 3)
@@ -416,16 +424,19 @@ def make_histogram_several_files(filename, map_file, ir_file, molecule='HCO+',sa
              color='C1', weight=600)
 
 
-    # plt.hist(protostars_parameter,bins,alpha=0.7, label='detections', edgecolor="C0", histtype='step',lw=2)
-    plt.hist(protostars_parameter,bins,alpha=0.7, label='detections', edgecolor="black")
     # plt.hist(not_protostar_parameter,bins,alpha=0.7, label='non-detections', histtype='step',edgecolor="C1",lw=2)
-    plt.hist(not_protostar_parameter,bins,alpha=0.7, label='non-detections', edgecolor="black")
+    plt.hist(not_protostar_parameter,bins,alpha=0.5, label='non-detections', edgecolor="black")
+
+    # plt.hist(protostars_parameter,bins,alpha=0.7, label='detections', edgecolor="C0", histtype='step',lw=2)
+    plt.hist(protostars_parameter,bins,alpha=0.5, label='detections', edgecolor="black")
+
+
     plt.xlabel(x_label,size=14)
     plt.legend(loc='upper left')
     plt.title(molecule)
 
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule + '_histogram_C04_and_int_above04_edge_ir_index.png'),
+        plt.savefig(os.path.join('Figures/concentration/', molecule + '_histogram_C02_and_emission_abov0p35.png'),
                     bbox_inches='tight', dpi=300)
     plt.show()
 
@@ -444,6 +455,7 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
             raise ValueError("All input arrays must have the same length.")
         is_numeric = [not math.isnan(x) and x>0.4 for x in HCO_data]
         is_nan = [math.isnan(x) or x<0.4 for x in HCO_data]
+        # print()
         # molecular_data=HCO_data
         # min_val= -2
 
