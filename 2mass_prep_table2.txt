@@ -1,5 +1,0 @@
-|  id         |    ra         |     dec       | best   |  size   |
-|   char      |     double    |     double    | char   | double  |
-|             |     deg       |     deg       |        | arcmin  |
-|  null       |  null         |  null         |  null  |  null   |
- V347 Aur       74.23758958333  51.51413444444  y        3      

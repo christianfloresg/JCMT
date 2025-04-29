@@ -30,6 +30,7 @@ def calculate_peak_SNR(filename,source_name, velo_limits=[2, 10], separate=False
     # lower_idx, upper_idx = closest_idx(velocity, val_down), closest_idx(velocity, val_up)
     lower_idx, upper_idx = find_nearest_index(velocity, val_down), find_nearest_index(velocity, val_up)
 
+    # print('lower & higher velocities considered', val_down, val_up)
     try:
         peak_signal_in_cube = np.nanmax(image[lower_idx:upper_idx,:,:])
     except:
@@ -211,15 +212,13 @@ def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=
     broad_upper_idx= find_nearest_index(array=velax, value=velocity_min)
 
 
+
     shortened_vel=velax[broad_lower_idx:broad_upper_idx]
     shortened_flux=spectrum[broad_lower_idx:broad_upper_idx]
 
     if broad_upper_idx<broad_lower_idx:
         shortened_vel = velax[broad_upper_idx:broad_lower_idx]
         shortened_flux = spectrum[broad_upper_idx:broad_lower_idx]
-
-
-
 
     H, A, x0, sigma = gauss_fit(shortened_vel,shortened_flux)
 
@@ -241,7 +240,7 @@ def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=
     if plot:
         plt.plot(shortened_vel, shortened_flux, 'ko', label='data')
         plt.plot(shortened_vel, gauss(shortened_vel, H, A, x0, sigma), '--r', label='fit')
-        plt.axvline(x=x0+nsigma*sigma,color='red',label=str(nsigma)+r'$\sigma$')
+        plt.axvline(x=x0+nsigma*sigma,color='red',label=r'$\pm$'+str(nsigma)+r'$\sigma$')
         plt.axvline(x=x0-nsigma*sigma,color='red')
         plt.legend()
         plt.title('Gaussian fit,  $f(x) = A e^{(-(x-x_0)^2/(2sigma^2))}$')
@@ -264,7 +263,7 @@ def fit_gaussian_to_spectrum(spectrum,velocity,velo_range=[-30,30],plot=True):
 
     velocity_min,velocity_max= velo_range[0],velo_range[1]
     position, FWHM, sigma = spectrum_properties(spectrum, velocity, velocity_min=velocity_min,
-                                          velocity_max=velocity_max, nsigma=6, plot=plot)
+                                          velocity_max=velocity_max, nsigma=3, plot=plot)
 
     return position, FWHM, sigma
 

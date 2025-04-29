@@ -46,9 +46,9 @@ def calculate_concentration_factor(source_name, molecule, n_sigma=3):
         aperture_radius = 7.635
 
     beam_size = np.pi/(4*np.log(2)) * (2 * aperture_radius)**2
-    peak_temp = peak_temperature_from_map(source_name, molecule)
-    area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma,plot=False)
-    concentration = 1 - beam_size / area * integrated_emission / peak_temp
+    peak_integrated_emission = peak_integrated_emission_from_map(source_name, molecule) ### This one requires object information.
+    area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=False)
+    concentration = 1 - beam_size / area * integrated_emission / peak_integrated_emission
     rounded_concentration = round(concentration,3)
     print(f"For {source_name}, the concentration factor is {rounded_concentration}")
     return concentration
@@ -509,11 +509,12 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'V347_Aur'
-    molecule ='HCO+'
-    # molecule ='C18O'
+    source_name = 'WLY2-42'
+    # molecule ='HCO+'
+    molecule ='C18O'
 
-    # calculate_concentration_factor(source_name, molecule, n_sigma=1)
+    calculate_concentration_factor(source_name, molecule, n_sigma=1)
+
     # save_concentration_factors_to_file(folder_fits='sdf_and_fits', molecule=molecule,save_filename='concentrations_'+molecule+'.txt')
     # plot_parameters(filename='text_files/Class_I_for-JCMT-plots.txt',molecule=molecule,save=True)
 
@@ -526,9 +527,9 @@ if __name__ == "__main__":
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
     #                                molecule=molecule,save=False)
 
-    make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt'
-                                 , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
-                                 molecule='HCO+', save=True)
+    # make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt'
+    #                              , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
+    #                              molecule='HCO+', save=True)
 
     # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
     #                                 map_file='spectrum_parameters_'+molecule+'.txt',molecule=molecule,save=True)

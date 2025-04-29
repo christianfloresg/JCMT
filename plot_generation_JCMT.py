@@ -179,8 +179,18 @@ def make_central_spectrum_data(source_name, molecule):
 
     velocity = data_cube.vel
 
+
+    #### Only use this if there is a problem with WCS and you need to calculate the spectrum at the center.
+    # ra_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[0]
+    # dec_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[1]
+    # skycoord_object = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
+    # print(skycoord_object)
+
     # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
     x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
+
+
+
 
     print(f"These are the sky coordinates of your {source_name}: ", skycoord_object)
 
@@ -219,35 +229,47 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     fits_file_name = source_name+'_'+molecule #'V347_Aur_HCO+'
     vmin,vmax=0.0,0.0 ## define initial values in case the fit does not work
 
+    # try:
+    #### First fit the spectrum retrieved from the whole cube
+    spectrum_fov, velocity_fov = make_averaged_spectrum_data(source_name, molecule)
+    pos_fov, FHWM_fov, sigma_fov = fit_gaussian_to_spectrum(spectrum_fov, velocity_fov,velo_range=[-30,30] ,plot=plot)
+    # rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
+
+    vmin_fov = pos_fov - 10*abs(sigma_fov)
+    vmax_fov = pos_fov + 10*abs(sigma_fov)
+
+
+    integrated_intensity_fov = integrate_flux_over_velocity(velocities=velocity_fov, flux=spectrum_fov,
+                                                                  v_min=pos_fov - 5*abs(sigma_fov),
+                                                                  v_max=pos_fov + 5*abs(sigma_fov))
+
+
+    ### Obtain spectral properties from fitting a gaussian to the central spectra
+    spectrum, velocity = make_central_spectrum_data(source_name, molecule)
+
+    LB_idx_noise_low, LB_idx_noise_high = find_nearest_index(velocity, -50), find_nearest_index(velocity, vmin - 10)
+    UB_idx_noise_low, UB_idx_noise_high = find_nearest_index(velocity, vmax + 10), find_nearest_index(velocity, 50)
+
+    line_noise = (np.nanstd(spectrum[LB_idx_noise_low:LB_idx_noise_high]) +
+                  np.nanstd(spectrum[UB_idx_noise_low:UB_idx_noise_high])) / 2.
+
+    print('Line noise = ', line_noise)
+
     try:
-        #### First fit the spectrum retrieved from the whole cube
-        spectrum_fov, velocity_fov = make_averaged_spectrum_data(source_name, molecule)
-        pos_fov, FHWM_fov, sigma_fov = fit_gaussian_to_spectrum(spectrum_fov, velocity_fov,velo_range=[-30,30] ,plot=plot)
-        # rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
-
-        vmin_fov = pos_fov - 10*abs(sigma_fov)
-        vmax_fov = pos_fov + 10*abs(sigma_fov)
-
-
-        integrated_intensity_fov = integrate_flux_over_velocity(velocities=velocity_fov, flux=spectrum_fov,
-                                                                      v_min=pos_fov - 5*abs(sigma_fov),
-                                                                      v_max=pos_fov + 5*abs(sigma_fov))
-
-
-        ### Obtain spectral properties from fitting a gaussian to the central spectra
-        spectrum, velocity = make_central_spectrum_data(source_name, molecule)
-        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[vmin_fov,vmax_fov] ,plot=plot)
+        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[vmin_fov,vmax_fov], plot=plot)
         rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
-        filename = source_name + '_' + molecule  # 'V347_Aur_HCO+'
-        data_cube = DataAnalysis(os.path.join('sdf_and_fits', source_name), filename + '.fits')
+
+        # filename = source_name + '_' + molecule  # 'V347_Aur_HCO+'
+        # data_cube = DataAnalysis(os.path.join('sdf_and_fits', source_name), filename + '.fits')
 
         vmin = pos - 5*abs(sigma)
         vmax = pos + 5*abs(sigma)
 
         ### Calculate the peak emission of the line,
         idx_line_low,idx_line_high = find_nearest_index(velocity,vmin),find_nearest_index(velocity,vmax)
-        Tmb = round(np.nanmax(spectrum[idx_line_low:idx_line_high]),4)
+
+        Tmb = round(np.nanmax(spectrum[idx_line_low:idx_line_high+1]),4)
 
         ### Calculate  the noise of the line.
         LB_idx_noise_low,LB_idx_noise_high = find_nearest_index(velocity,-50), find_nearest_index(velocity,vmin-10)
@@ -256,11 +278,18 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         line_noise = (np.nanstd(spectrum[LB_idx_noise_low:LB_idx_noise_high])+
                       np.nanstd(spectrum[UB_idx_noise_low:UB_idx_noise_high]))/2.
 
+        line_SNR = round(Tmb/line_noise,2)
         ### Get the integrated intensity from the spectrum
         integrated_intensity_main_beam = integrate_flux_over_velocity(velocities=velocity, flux=spectrum,
                                                                       v_min=vmin, v_max=vmax)
 
-        line_SNR = round(Tmb/line_noise,2)
+
+        #### Get noise & peak SNR from the cube
+        peak_signal_in_cube, average_noise_images = calculate_peak_SNR(fits_file_name,source_name=source_name,
+                                                                   velo_limits=[vmin, vmax], separate=True)
+
+        image_noise_level = round(average_noise_images,4)
+        peak_SNR = round(peak_signal_in_cube/average_noise_images,1)
 
     except ValueError as err:
         print(f"Parameters for {source_name} and {molecule} was not produced.")
@@ -270,14 +299,15 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         integrated_intensity_main_beam = 0.0
         integrated_intensity_fov = 0.0
         rounded_vel_pos, rounded_FHWM, rounded_sigma = 0.0,0.0,0.0
-        line_noise = 1.0
+        # LB_idx_noise_low,LB_idx_noise_high = find_nearest_index(velocity,-50), find_nearest_index(velocity,vmin-10)
+        # UB_idx_noise_low,UB_idx_noise_high = find_nearest_index(velocity,vmax+10), find_nearest_index(velocity,50)
+        #
+        # line_noise = (np.nanstd(spectrum[LB_idx_noise_low:LB_idx_noise_high])+
+        #               np.nanstd(spectrum[UB_idx_noise_low:UB_idx_noise_high]))/2.
         line_SNR = 0.0
 
-    #### Get noise & peak SNR from the cube
-    peak_signal_in_cube, average_noise_images = calculate_peak_SNR(fits_file_name,source_name=source_name,
-                                                                   velo_limits=[vmin, vmax], separate=True)
-    image_noise_level = round(average_noise_images,4)
-    peak_SNR = round(peak_signal_in_cube/average_noise_images,1)
+        image_noise_level = 0.0
+        peak_SNR = 0.0
 
     if plot:
         print('the integrated intensity is ', integrated_intensity_main_beam)
@@ -285,7 +315,6 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         plt.axvline(vmin)
         plt.axvline(vmax)
         plt.show()
-
 
     # Prepare the values for writing/updating
     values_to_text = [
@@ -312,6 +341,7 @@ def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
         ### I first try to get the velocity centroid from the data saved in text file.
         pos = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name, position=6)
         pos = float(pos)
+        print('I found this value', pos)
     except:
         pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-20,30],plot=False)
 
@@ -468,7 +498,7 @@ def offset_coordinates(ax,skycoord_object):
     lon.set_ticks_position('b')
     lon.set_ticklabel_position('b')
     lon.set_axislabel_position('b')
-    lon.set_ticks(spacing=30. * u.arcsec)
+    lon.set_ticks(spacing=20. * u.arcsec)
 
     lat = overlay['lat']
     lat.set_format_unit(u.arcsec)
@@ -529,11 +559,9 @@ def create_moment_eight_map(source_name,molecule):
     return moment_eight
 
 
-def peak_temperature_from_map(source_name, molecule):
+def peak_integrated_emission_from_map(source_name, molecule):
     '''
-    Find the peak temperature within the moment zero map. This
-    is equivalent of finding the peak integrated intensity
-    within the map.
+    Find the peak integrated emission within the moment zero map.
     :param source_name:
     :param molecule:
     :return:
@@ -543,7 +571,7 @@ def peak_temperature_from_map(source_name, molecule):
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
 
     # moment_eight = create_moment_eight_map(source_name, molecule)
-    moment_eight = create_moment_zero_map(source_name, molecule)
+    moment_zero = create_moment_zero_map(source_name, molecule)
 
     simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
     skycoord_object = get_icrs_coordinates(simbad_name)
@@ -565,6 +593,18 @@ def peak_temperature_from_map(source_name, molecule):
     # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
     x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
 
+
+    #### Only use this if there is a problem with WCS and you need to calculate the spectrum at the center.
+    # ra_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[0]
+    # dec_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[1]
+    # skycoord_object = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
+    # x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
+
+
+    print ('HERE!!!!')
+    print(x_center,y_center)
+
+
     print(f"These are the sky coordinates of your {source_name}: ", skycoord_object)
 
     # Initialize a list to store the pixel values within the aperture
@@ -579,16 +619,16 @@ def peak_temperature_from_map(source_name, molecule):
             # Check if the distance is within the aperture radius
             if distance <= aperture_radius_pixels:
                 # Append the data at this pixel position
-                center_beam_values.append(moment_eight[yy, xx])
+                center_beam_values.append(moment_zero[yy, xx])
 
     # Convert center_beam_values to a NumPy array for easy manipulation
     center_beam_values = np.array(center_beam_values)
 
-    peak_temperature = np.nanmax(center_beam_values)
+    peak_integrated_emission = np.nanmax(center_beam_values)
 
-    print('peak temperature within central beam: ',peak_temperature, ' K')
+    print('peak integrated emission within central beam: ',peak_integrated_emission, ' K')
 
-    return peak_temperature
+    return peak_integrated_emission
 
 def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot=True):
     '''
@@ -613,9 +653,6 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
 
-    ### Here I can go from sky position to pixel coordinates
-    simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
-    skycoord_object = get_icrs_coordinates(simbad_name)
 
     image_mom_0 = create_moment_zero_map(source_name, molecule)
 
@@ -632,7 +669,6 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
         float_sigma_vel = float(sigma_vel)
         n_sigmas_velocity = 6
         moment_zero_noise = (0.2*n_sigmas_velocity*float_sigma_vel)**0.5*float_noise_level ## 0.2 is the binning in km/s
-
     except:
         raise Exception("Sorry, the moment zero noise to calculate the area")
 
@@ -656,7 +692,7 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
 
     total_emission = np.nansum(image_mom_0/pix_per_beam)
 
-    print('Noise of the map:', moment_zero_noise, ' K')
+    print('Noise of the moment 1 map:', moment_zero_noise, ' K km/s')
     print('Total integrated emission:', total_emission,' K km/s')
 
     if plot:
@@ -710,7 +746,11 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     print('molecule: ',data_cube.molecule)
     ### Here I can go from sky position to pixel coordinates
     simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
+
     skycoord_object = get_icrs_coordinates(simbad_name)
+
+    print('skycoord are: ',skycoord_object)
+    print ('wcs', moment_0.wcs.wcs_pix2world(moment_0.nx/2, moment_0.ny/2, 0))
 
     image_mom_0 = create_moment_zero_map(source_name, molecule)
 
@@ -719,6 +759,10 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         cmap = sns.color_palette("YlOrBr",as_cmap=True)
 
     elif data_cube.molecule == 'C18O':
+        aperture_radius = 7.635
+        cmap = sns.color_palette("YlGnBu",as_cmap=True)
+
+    elif data_cube.molecule == 'CO':
         aperture_radius = 7.635
         cmap = sns.color_palette("YlGnBu",as_cmap=True)
 
@@ -746,14 +790,15 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
 
         float_sigma_vel = float(sigma_vel)
 
-        moment_zero_noise = (0.2*4*float_sigma_vel)**0.5*float_noise_level ## 0.2 is the binning in km/s
+        moment_zero_noise = (0.2*6*float_sigma_vel)**0.5*float_noise_level ## 0.2 is the binning in km/s
 
-        moment_zero_noise_array = moment_zero_noise* np.array([3, 5,10,20,50])
+        moment_zero_noise_array = moment_zero_noise* np.array([1, 3, 5,10,20,50,80,100,150])
         # print(noise_level)
         # print(sigma_vel)
         # print (moment_zero_noise)
     except:
-        moment_zero_noise_array = np.array([0.2, 0.4, 0.8, 0.95])
+        print("can't compute the noise for contours, I usea peak intensity intervals")
+        moment_zero_noise_array = np.array([0.5,0.6, 0.8, 0.95])*np.nanmax(image_mom_0)
 
     levels = moment_zero_noise_array
 
@@ -762,7 +807,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower')#,vmax=0.5)
     # divider = make_axes_locatable(fig1)
     # cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, format='%.2f')
+    cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, format='%.1f')
     cbar.set_label(label='Integrated Intensity ' +r'(K km s$^{-1}$)', size=14)
 
     contour = fig1.contour(image_mom_0, levels=levels, colors="black")
@@ -771,7 +816,6 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     fig1.set_xlabel('RA',size=12)
     fig1.set_ylabel('DEC',size=12)
 
-    offset_coordinates(fig1,skycoord_object)
 
 
     print('These are the sky coordinates of your object: ',skycoord_object)
@@ -779,14 +823,19 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     # u.hourangle, u.deg
 
     if use_sky_coord_object:
+
+        offset_coordinates(fig1, skycoord_object)
+
         ra_center = skycoord_object.ra.degree
         dec_center = skycoord_object.dec.degree
         print(skycoord_object.to_string('hmsdms'))
-        IR_position = fig1.scatter(x=ra_center,y=dec_center, s=200, c='gray', transform=fig1.get_transform('icrs'), marker='x',
-                                clip_on=False)
+        IR_position = fig1.scatter(x=ra_center,y=dec_center, s=150, c='gray', transform=fig1.get_transform('icrs'), marker='x',
+                                clip_on=False,linewidths=3.0)
 
+        # ra_offset = 20/3600
+        # dec_offset = 80/3600
 
-        ra_offset = 45/3600
+        ra_offset = 50/3600
         dec_offset = 45/3600
         beam_sky_coord_object = SkyCoord(ra=ra_center+ra_offset, dec=dec_center-dec_offset, unit=(u.deg, u.deg), frame='icrs')
         s = SphericalCircle(beam_sky_coord_object, aperture_radius * u.arcsec,
@@ -795,7 +844,50 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
 
         fig1.add_patch(s)
 
-    plt.axis('square')
+
+    else:
+
+
+        ra_center = moment_0.wcs.wcs_pix2world(moment_0.nx/2, moment_0.ny/2, 0)[0]
+        dec_center = moment_0.wcs.wcs_pix2world(moment_0.nx/2, moment_0.ny/2, 0)[1]
+
+        sky_center = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
+
+        offset_coordinates(fig1, sky_center)
+
+        IR_position = fig1.scatter(x=ra_center,y=dec_center, s=150, c='gray', transform=fig1.get_transform('icrs'), marker='x',
+                                clip_on=False,linewidths=3.0)
+
+        ra_offset = 50/3600
+        dec_offset = 45/3600
+        beam_sky_coord_object = SkyCoord(ra=ra_center+ra_offset, dec=dec_center-dec_offset, unit=(u.deg, u.deg), frame='icrs')
+        s = SphericalCircle(beam_sky_coord_object, aperture_radius * u.arcsec,
+                            edgecolor='white', facecolor='gray',
+                            transform=fig1.get_transform('fk5'),linewidth=2,linestyle='-')
+
+        fig1.add_patch(s)
+
+
+        ### if SCAN DATA set some smaller limits
+        x_center, y_center = moment_0.wcs.world_to_pixel(sky_center)  ## This one if 2D cube
+        print('center in pixels', x_center, y_center)
+        pixel_limits_ra = 35
+        pixel_limits_dec = 35
+        fig1.set_xlim(x_center - pixel_limits_ra, x_center + pixel_limits_ra)
+        fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
+
+
+    ### Change the limits
+    print('size of cube in pixels')
+    print(data_cube.nx,data_cube.ny)
+
+    # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
+    # pixel_limits_ra = 35
+    # pixel_limits_dec = 35
+    # fig1.set_xlim(x_center - pixel_limits_ra, x_center + pixel_limits_ra)
+    # fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
+
+    # plt.axis('square')
 
     if save:
         plt.savefig(os.path.join('Figures/Moment_maps/moment-zero/',
@@ -916,11 +1008,11 @@ def mass_calculate_spectral_properties(folder_fits, molecule):
             print(f"An unexpected error occurred with {sources}: {e}")
 
 
+
 if __name__ == "__main__":
 
-    source_name = 'DG-Tau'
-    # source_name = 'V347_Aur'
-
+    source_name = 'Elia32'
+    # source_name = 'T-Tauri'
     # molecule ='HCO+'
     molecule ='C18O'
 
@@ -929,19 +1021,17 @@ if __name__ == "__main__":
 
     ### Step 1 creates a plot of the spectrum
     # plot_spectrum(source_name, molecule,type='central',save=True)
-    # plot_spectrum(source_name, molecule,type='fov',save=False)
+    # plot_spectrum(source_name, molecule,type='fov',save=True)
 
     ### Step 3
     ### Plot the maps
-    # area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=3)
-    plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True,percentile_outlier=100)
-    # plot_moment_eight_map(source_name,molecule,save=True)
+    # area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=1)
+    # plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True,percentile_outlier=100.0)
+    # plot_moment_eight_map(source_name,molecule,save=False)
 
     #### Mass produce moment maps
     # mass_calculate_spectral_properties('sdf_and_fits', molecule)
     # mass_produce_moment_maps('sdf_and_fits',molecule)
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
-    # peak_temperature_from_map(source_name, molecule)
-    # calculate_concentration_factor(source_name, molecule, n_sigma=1)
-    # save_concentration_factors_to_file(folder_fits='sdf_and_fits', molecule=molecule,save_filename='concentrations_'+molecule+'.txt')
+    # peak_integrated_emission_from_map(source_name, molecule)

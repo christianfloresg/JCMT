@@ -4,7 +4,7 @@ import numpy as np
 
 def find_files_in_folder(path_to_folder):
     for x in os.listdir(path_to_folder):
-        if x.endswith(".sdf"):
+        if x.endswith(".fits"):
             # Prints only text file present in My Folder
             return x
 
@@ -13,6 +13,7 @@ def create_shell_script(path_to_folder):
     star_name= path_to_folder.split('/')[-2]
     molec_line= path_to_folder.split('/')[-1]
 
+    print(star_name,molec_line)
     sdf_file = star_name+"_"+molec_line+".sdf"
     tmb_file = star_name+"_"+molec_line+"_Tmb"+".sdf"
     resampled_file = star_name+"_"+molec_line+"Tmb_resampled"+".sdf"
@@ -33,7 +34,9 @@ def create_shell_script(path_to_folder):
     file.write("wcsattrib ndf="+sdf_file+" mode=set name=StdofRest newval=LSRK\n")
 
     file.write("cdiv in="+sdf_file+" scalar=0.63 out="+tmb_file +"\n")
-    file.write('sqorst in='+tmb_file+' out='+resampled_file+' factors="[4,4,1] conserve"' +"\n")
+    file.write('setunits '+sdf_file+' units=\"K km/s \" \n')
+
+    file.write('sqorst in='+tmb_file+' out='+resampled_file+' factors="[4,4,1]"' +"\n")
 
 
     file.write("ndf2fits in="+resampled_file+" out="+final_fits_file +"\n")
@@ -84,7 +87,7 @@ def compute_concentration_factor(B,R_obs,S_int,S_peak):
 
 
 if __name__ == "__main__":
-    path_to_folder = '/Users/christianflores/Documents/work/Astronomy_data/JCMT/Archival/IRAS04181+2655/HCO+'
+    path_to_folder = '/Users/christianflores/Documents/work/Astronomy_data/JCMT/Archival/T-Tauri/HCO+'
 
     create_shell_script(path_to_folder)
     # archival_data_preparation(path_to_folder)

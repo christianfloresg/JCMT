@@ -3,6 +3,10 @@ import matplotlib.image as mpimg
 import os
 import numpy as np
 import glob
+from datetime import date,datetime
+today = str(date.today())
+currentDateAndTime = datetime.now()
+hour_now = str(currentDateAndTime.hour)
 
 def listdir_nohidden(path):
     return glob.glob(os.path.join(path, '*'))
@@ -103,7 +107,7 @@ def plot_images_grid3(image_dir, num_columns=3, max_sources=None,ini_num=None, o
     plt.show()
 
 
-def plot_images_grid(image_dir, grid_shape=(5, 6), output_file=None, c_factor_sourced=False):
+def plot_images_grid(image_dir, c_factor_folder, c_factor_file, grid_shape=(5, 6), output_file=None, c_factor_sorted=False):
     """
     Plot a grid of images from a directory with tighter spacing.
 
@@ -114,12 +118,17 @@ def plot_images_grid(image_dir, grid_shape=(5, 6), output_file=None, c_factor_so
         output_file (str): If provided, saves the plot to this file.
     """
 
-    molecule = image_dir.split('/')[-2]
+
+    if 'HCO+' in c_factor_file:
+        molecule = 'HCO+'
+    elif 'C18O' in c_factor_file:
+        molecule = 'C18O'
     print('We are using this molecule: ',molecule)
 
     # List all .png files in the directory
     image_files = sorted([f for f in os.listdir(image_dir) if f.endswith('.png')])
 
+    # print(image_files)
 
     rows, cols = grid_shape
     if len(image_files) > rows * cols:
@@ -133,22 +142,38 @@ def plot_images_grid(image_dir, grid_shape=(5, 6), output_file=None, c_factor_so
     unsorted_source_name, c_s1, c_s3 = read_file(folder=c_factor_folder, filename=c_factor_file)
     sorted_names = [[x,y] for x, y  in sorted(zip(c_s1, unsorted_source_name),reverse=True)]
 
+    base_names = set()
+    for filename in image_files:
+        if molecule == 'HCO+':
+            base_name = filename.split('_HCO')[0]
+            base_names.add(base_name)
+        else:
+            base_name = filename.split('_C18')[0]
+            base_names.add(base_name)
+    # Step 2: Filter sorted_names based on matching names
+    filtered_sorted_names = [entry for entry in sorted_names if entry[1] in base_names]
 
-    if c_factor_sourced:
-        for ax, img_file in zip(axes, sorted_names):
+    print(len(filtered_sorted_names))
+
+    if c_factor_sorted:
+        for ii, (ax, img_file) in enumerate(zip(axes, filtered_sorted_names)):
             source_name = img_file[1]
-            concentration = round(img_file[0],2)
-            png_name = [name for name in image_files if source_name in name][0]
+            print(source_name)
+            # print(filtered_sorted_names)
+            try:
+                concentration = round(img_file[0],2)
+                png_name = [name for name in image_files if source_name in name][0]
+                img = mpimg.imread(os.path.join(image_dir, png_name))
+                ax.imshow(img)
 
-            img = mpimg.imread(os.path.join(image_dir, png_name))
-            ax.imshow(img)
+                if molecule == 'HCO+':
+                    ax.set_title(source_name +r' $C_{HCO^+}$=' +str(concentration), fontsize=10)
+                else:
+                    ax.set_title(source_name +r' $C_{C^{18}O}$=' +str(concentration), fontsize=10)
 
-            if molecule == 'HCO+':
-                ax.set_title(source_name +r' $C_{HCO^+}$=' +str(concentration), fontsize=10)
-            else:
-                ax.set_title(source_name +r' $C_{C^{18}O}$=' +str(concentration), fontsize=10)
-
-            ax.axis('off')  # Turn off axes
+                ax.axis('off')  # Turn off axes
+            except:
+                print("I don't have image corresponding to " +source_name+ " in folder")
 
     else:
         counter = 0
@@ -174,8 +199,10 @@ def plot_images_grid(image_dir, grid_shape=(5, 6), output_file=None, c_factor_so
     plt.subplots_adjust(wspace=0.005, hspace=0.01)  # Reduce horizontal and vertical spacing
 
     if output_file:
-        plt.savefig(output_file+'_'+molecule+'_spectra.png', dpi=300, bbox_inches='tight')
+        plt.savefig(output_file+'_'+molecule+'_'+today+'_'+hour_now+'.png', dpi=300, bbox_inches='tight')
         print(f"Grid plot saved to {output_file}.")
+        # plt.show()
+
     else:
         plt.show()
 
@@ -189,11 +216,13 @@ if __name__ == "__main__":
     # c_factor_file='concentrations_HCO+.txt'
 
     # image_directory = "./Figures/Spectra/HCO+/central/"  # Replace with the directory containing your .png files
-    image_directory = "./Figures/gallery_images/"  # Replace with the directory containing your .png files
+    # image_directory = "./Figures/gallery_images/"  # Replace with the directory containing your .png files
+    image_directory = "./Figures/Moment_maps/moment-zero/C18O_offset_1-sigma/outside_center_emission/"  # Replace with the directory containing your .png files
 
-    grid_shape = (6, 3)  # Grid of 5 rows and 6 columns
+    grid_shape = (2, 4)  # Grid of 5 rows and 6 columns
 
-    # plot_images_grid(image_directory,  grid_shape, output_file="./Figures/grid_plot")
+    plot_images_grid(image_directory, c_factor_folder, c_factor_file, grid_shape,
+                     output_file="./Figures/grid_plots/grid_plot_no_source",c_factor_sorted=True)
     # plot_same_source_grid(image_directory,  grid_shape, output_file="./Figures/grid_plot_per_source")
-    plot_images_grid3(image_directory, num_columns=3, max_sources=5, ini_num=5, output_file='second_batch')
+    # plot_images_grid3(image_directory, num_columns=3, max_sources=5, ini_num=5, output_file='second_batch')
 

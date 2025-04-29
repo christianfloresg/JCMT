@@ -28,7 +28,8 @@ def normalize_ra_dec(value):
 def ra_to_seconds(ra):
     """Convert RA (HH:MM:SS) to seconds for sorting."""
     hh, mm, ss = map(float, ra.split(":"))
-    return hh * 3600 + mm * 60 + ss
+    print(ra)
+    return hh * 3600 + mm * 60 + round(ss,2)
 
 
 def format_ra_dec(value):
@@ -42,8 +43,7 @@ def format_ra_dec(value):
     """
     return value  # Since normalize_ra_dec already formats them with colons
 
-
-def create_latex_table(file_path, output_file):
+def create_latex_table_concentration_factor(file_path, output_file):
     """
     Creates a LaTeX deluxetable* from an Excel or Google Sheets file, sorted by RA.
 
@@ -59,7 +59,126 @@ def create_latex_table(file_path, output_file):
 
     # Ensure the column names match the table structure
     expected_columns = [
-        "Source Name", "RA", "DEC", "Cloud", "alpha", "Class", "HCO+ Obs.", "C18O Obs."
+        "Source Name", "HCO+_concentration", "C18O_concentration", "Integ.Beam.HCO+", "Integ.Beam.C18O", "Interpretation", "Note"
+    ]
+
+    for col in expected_columns:
+        if col not in df.columns:
+            raise ValueError(f"Column '{col}' not found in the file. Please check the column names.")
+
+    # Begin LaTeX table
+    latex_table = r"""
+\begin{deluxetable*}{lcccccc}
+\tablecaption{Summary of protostellar properties \label{tab:observation_info}}
+\tablecolumns{8}
+%\tablenum{1}
+%\tablewidth{30pt}
+\tabletypesize{\footnotesize}
+\tablehead{
+\colhead{Source Name} & \colhead{HCO+ concentration} & \colhead{C18O concentration} & \colhead{Integ. Beam. HCO+} & 
+ \colhead{Integ. Beam. C18O} & \colhead{Interpretation} & \colhead{Note} \\
+\colhead{} & \colhead{ } & \colhead{ } & \colhead{(K km/s)} & 
+& \colhead{(K km/s)} & \colhead{ } & \colhead{ }
+}
+%\colnumbers
+\startdata
+"""
+
+    # Add rows from the DataFrame
+    for _, row in df.iterrows():
+        latex_table += f"    {row['Source Name']} & {row['HCO+_concentration']} & {row['C18O_concentration']} & {row['Integ.Beam.HCO+']} & {row['Integ.Beam.C18O']} & {row['Interpretation']} & {row['Note']} \\\\ \n"
+
+    # End LaTeX table
+    latex_table += r"""
+\enddata
+\tablecomments{References for the A$_v$ value are given in the last column. }
+\end{deluxetable*}
+"""
+
+    # Write the LaTeX table to the output file
+    with open(output_file, "w") as f:
+        f.write(latex_table)
+
+    print(f"LaTeX table saved to {output_file}.")
+
+
+def create_latex_table_spectral_parameters(file_path, output_file):
+    """
+    Creates a LaTeX deluxetable* from an Excel or Google Sheets file, sorted by RA.
+
+    Args:
+        file_path (str): Path to the Excel or CSV file.
+        output_file (str): Path to save the generated LaTeX file.
+    """
+    # Read the Excel or CSV file into a pandas DataFrame
+    df = pd.read_excel(file_path)  # Use read_csv() for CSV files
+
+    # Standardize column names
+    df.columns = [col.strip() for col in df.columns]
+
+    # Ensure the column names match the table structure
+    expected_columns = [
+        "Source Name", "Peak_C18O_central", "C18O_RMS", "C18O_Peak_SNR", "C18O_Velocity", "Peak_HCO+_central", "HCO+_RMS","HCO+_Peak_SNR", "HCO+_Velocity"
+    ]
+
+    for col in expected_columns:
+        if col not in df.columns:
+            raise ValueError(f"Column '{col}' not found in the file. Please check the column names.")
+
+    # Begin LaTeX table
+    latex_table = r"""
+\begin{deluxetable*}{lcccccccc}
+\tablecaption{Summary of protostellar properties \label{tab:observation_info}}
+\tablecolumns{9}
+%\tablenum{1}
+%\tablewidth{30pt}
+\tabletypesize{\footnotesize}
+\tablehead{
+\colhead{Source Name} & \colhead{Peak C18O} & \colhead{C18O RMS} & \colhead{C18O peak RMS} & \colhead{C18O velocity} & 
+ \colhead{Peak HCO+} & \colhead{HCO+ RMS} & \colhead{HCO+ peak RMS} &\colhead{HCO+ velocity} \\
+\colhead{} & \colhead{central (K)} & \colhead{ (K)} & \colhead{} & \colhead{(km/s)} & 
+& \colhead{central (K)} & \colhead{ (K)} & \colhead{} & \colhead{(km/s)}
+}
+%\colnumbers
+\startdata
+"""
+
+    # Add rows from the DataFrame
+    for _, row in df.iterrows():
+        latex_table += f"    {row['Source Name']} & {row['Peak_C18O_central']} & {row['C18O_RMS']} & {row['C18O_Peak_SNR']} " \
+                       f"& {row['C18O_Velocity']} & {row['Peak_HCO+_central']} & {row['HCO+_RMS']} & {row['HCO+_Peak_SNR']}" \
+                       f" & {row['HCO+_Velocity']} \\\\ \n"
+
+    # End LaTeX table
+    latex_table += r"""
+\enddata
+\tablecomments{References for the A$_v$ value are given in the last column. }
+\end{deluxetable*}
+"""
+
+    # Write the LaTeX table to the output file
+    with open(output_file, "w") as f:
+        f.write(latex_table)
+
+    print(f"LaTeX table saved to {output_file}.")
+
+def create_latex_table_obs_parameters(file_path, output_file):
+    """
+    Creates a LaTeX deluxetable* from an Excel or Google Sheets file, sorted by RA.
+
+    Args:
+        file_path (str): Path to the Excel or CSV file.
+        output_file (str): Path to save the generated LaTeX file.
+    """
+    # Read the Excel or CSV file into a pandas DataFrame
+    df = pd.read_excel(file_path)  # Use read_csv() for CSV files
+
+    # Standardize column names
+    df.columns = [col.strip() for col in df.columns]
+
+    # Ensure the column names match the table structure
+    expected_columns = [
+        "Source Name", "RA", "DEC", "Cloud", "alpha", "Class", "Av", "Reference"
     ]
 
     for col in expected_columns:
@@ -87,7 +206,7 @@ def create_latex_table(file_path, output_file):
 %\tablewidth{30pt}
 \tabletypesize{\footnotesize}
 \tablehead{
-\colhead{Source Name} & \colhead{RA} & \colhead{DEC} & \colhead{Cloud} & \colhead{$\alpha$} & \colhead{Class} & \colhead{HCO+ Obs.} & \colhead{C18O Obs.}
+\colhead{Source Name} & \colhead{RA} & \colhead{DEC} & \colhead{Cloud} & \colhead{$\alpha$} & \colhead{Class} & \colhead{A$_v$} & \colhead{Reference}
 }
 %\colnumbers
 \startdata
@@ -95,12 +214,12 @@ def create_latex_table(file_path, output_file):
 
     # Add rows from the DataFrame
     for _, row in df.iterrows():
-        latex_table += f"    {row['Source Name']} & {row['RA']} & {row['DEC']} & {row['Cloud']} & {row['alpha']} & {row['Class']} & {row['HCO+ Obs.']} & {row['C18O Obs.']} \\\\ \n"
+        latex_table += f"    {row['Source Name']} & {row['RA']} & {row['DEC']} & {row['Cloud']} & {row['alpha']} & {row['Class']} & {row['Av']} & {row['Reference']} \\\\ \n"
 
     # End LaTeX table
     latex_table += r"""
 \enddata
-\tablecomments{and Serpens from Dzib et al. (2011).}
+\tablecomments{References for the A$_v$ value are given in the last column. }
 \end{deluxetable*}
 """
 
@@ -111,7 +230,12 @@ def create_latex_table(file_path, output_file):
     print(f"LaTeX table saved to {output_file}.")
 
 
-# Example Usage
-file_path = "protostellar_data.xlsx"  # Replace with the path to your Excel or CSV file
-output_file = "protostellar_table.tex"  # Replace with the desired LaTeX output file name
-create_latex_table(file_path, output_file)
+
+if __name__ == "__main__":
+
+    # Example Usage
+    file_path = "JCMT_spectral_table_for_paper_April_9_2025.xlsx"  # Replace with the path to your Excel or CSV file
+    output_file = "protostellar_spectral_table_April_9_2025.tex"  # Replace with the desired LaTeX output file name
+    # create_latex_table_obs_parameters(file_path, output_file)
+    create_latex_table_spectral_parameters(file_path, output_file)
+    # create_latex_table_concentration_factor(file_path, output_file)
