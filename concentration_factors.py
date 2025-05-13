@@ -4,7 +4,10 @@ import math
 from scipy import stats
 import astropy.units as u
 import difflib
-
+from datetime import date,datetime
+today = str(date.today())
+currentDateAndTime = datetime.now()
+hour_now = str(currentDateAndTime.hour)
 
 def are_names_approximate(name1, name2, threshold=0.8):
     """
@@ -356,73 +359,84 @@ def plot_parameters(filename,molecule,save=False):
         plt.savefig(os.path.join('Figures/concentration/', molecule+'_comparing_both_concentrations.png'), bbox_inches='tight', dpi=300)
     plt.show()
 
-def make_histogram_several_files(filename, map_file, ir_file, molecule='HCO+',save=False):
-
-    Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
-    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
-
-    logg_values =logg_values/100.
+def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity', molecule='HCO+',save=False):
 
     T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
 
-    # ir_index, ir_corrected_values, star_name_map = read_ir_index_parameters(ir_file)
+
+    Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
+    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
+    logg_values =logg_values/100.
+
+    ir_index, ir_corrected_values, star_name_ir_index = read_ir_index_parameters(ir_file)
 
     protostars_parameter =[]
     not_protostar_parameter=[]
     counted_source = []
 
-    for ii in range(len(star_name)):
-        for jj in range(len(star_name_map)):
-            if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
-                counted_source.append(ii)
-                if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.35:
-                # if not math.isnan(HCO_data[ii]) and S_peak[jj] > 0.35:
+    if parameter.lower() == 'gravity':
+        for ii in range(len(star_name)):
+            # print('All sources: ',star_name[ii])
+            for jj in range(len(star_name_map)):
+                if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
+                    # print(ii)
+                    counted_source.append(ii)
+                    if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3:
 
-                    protostars_parameter.append(logg_values[ii])
-                    # print (ir_index[jj])
-                    # protostars_parameter.append(ir_corrected_values[jj])
-                    # protostars_parameter.append(ir_index[jj])
+                        protostars_parameter.append(logg_values[ii])
+                        print('Detections',star_name[ii])
 
-                    print('Detections',star_name[ii])
-                    # print()
+                    else:
+                        not_protostar_parameter.append(logg_values[ii])
+                        print('NO detections',star_name[ii])
 
-                    # print(star_name[ii])
+            if ii not in counted_source:
+                not_protostar_parameter.append(logg_values[ii])
 
-                else:
-                    not_protostar_parameter.append(logg_values[ii])
-                    # not_protostar_parameter.append(ir_corrected_values[jj])
-                    # not_protostar_parameter.append(ir_index[jj])
+    elif parameter.lower() == 'ir_index':
 
-                    print('NOOOOO detections',star_name[ii])
-                    # print()
+        for ii in range(len(star_name)):
+            # print('All sources: ',star_name[ii])
+            for jj in range(len(star_name_map)):
+                for zz in range(len(star_name_ir_index)):
+                    if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9) & are_names_approximate(star_name[ii], star_name_ir_index[zz], threshold=0.9):
 
-        if ii not in counted_source:
-            not_protostar_parameter.append(logg_values[ii])
-            # not_protostar_parameter.append(ir_corrected_values[jj])
-            # not_protostar_parameter.append(ir_index[jj])
+                        if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3:
+
+                            protostars_parameter.append(ir_corrected_values[zz])
+                            # protostars_parameter.append(ir_index[jj])
+
+                            print('Detections',star_name[ii])
+
+                        else:
+                            not_protostar_parameter.append(ir_corrected_values[zz])
+                            # not_protostar_parameter.append(ir_index[jj])
+                            print('NOOOOO detections',star_name[ii])
+
 
     res= stats.ttest_ind(protostars_parameter, not_protostar_parameter, equal_var=False)
     print(res)
-    x_label =' Gravity'
-    bins = np.arange(2.8, 4.0, 0.2)
 
-    # x_label ='ir index'
-    # bins = np.arange(-1.25, 1.5, 0.25)
 
-    x_leg, y_leg = 2.8, 6
-    # x_leg, y_leg = 0.4, 5
+    mean_val_1 = round(np.nanmean(protostars_parameter), 2)
+    std_val_1 = round(np.nanstd(protostars_parameter), 2)
 
-    mean_val_1 = round(np.nanmean(protostars_parameter), 3)
-    std_val_1 = round(np.nanstd(protostars_parameter), 3)
+    mean_val_2 = round(np.nanmean(not_protostar_parameter), 2)
+    std_val_2 = round(np.nanstd(not_protostar_parameter), 2)
 
-    mean_val_2 = round(np.nanmean(not_protostar_parameter), 3)
-    std_val_2 = round(np.nanstd(not_protostar_parameter), 3)
 
-    plt.text(x=x_leg, y=y_leg, s=r'$\mu$ = ' + str(mean_val_1) + r' $\sigma$ = ' + str(std_val_1), size=12, color='C0',
-             weight=600)
-    plt.text(x=x_leg, y=y_leg - 1, s=r'$\mu$ = ' + str(mean_val_2) + r' $\sigma$ = ' + str(std_val_2), size=12,
-             color='C1', weight=600)
+    # plt.title(molecule)
+    if parameter.lower() == 'gravity':
+        x_label ='log(g)'
+        bins = np.arange(2.7, 4.2, 0.2)
+        x_leg, y_leg = 2.75, 6.5
+        # plt.legend(loc='upper left')
 
+    elif parameter.lower() == 'ir_index':
+        x_label ='Corrected IR index'
+        bins = np.arange(-1.25, 1.25, 0.25)
+        x_leg, y_leg = 0.1, 4
+        # plt.legend(loc='upper right')
 
     # plt.hist(not_protostar_parameter,bins,alpha=0.7, label='non-detections', histtype='step',edgecolor="C1",lw=2)
     plt.hist(not_protostar_parameter,bins,alpha=0.5, label='non-detections', edgecolor="black")
@@ -430,13 +444,16 @@ def make_histogram_several_files(filename, map_file, ir_file, molecule='HCO+',sa
     # plt.hist(protostars_parameter,bins,alpha=0.7, label='detections', edgecolor="C0", histtype='step',lw=2)
     plt.hist(protostars_parameter,bins,alpha=0.5, label='detections', edgecolor="black")
 
-
     plt.xlabel(x_label,size=14)
-    plt.legend(loc='upper left')
-    plt.title(molecule)
 
+    plt.text(x=x_leg, y=y_leg, s=r'$\mu$ = ' + str(mean_val_1) + r' $\sigma$ = ' + str(std_val_1), size=12, color='C1',
+             weight=600)
+    plt.text(x=x_leg, y=y_leg - 0.5, s=r'$\mu$ = ' + str(mean_val_2) + r' $\sigma$ = ' + str(std_val_2), size=12,
+             color='C0', weight=600)
+
+    plt.legend()
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule + '_histogram_C02_and_emission_abov0p35.png'),
+        plt.savefig(os.path.join('Figures/concentration/', molecule + 'IR_histogram_C02_and_emission_abov0p35_'+ today +'.png'),
                     bbox_inches='tight', dpi=300)
     plt.show()
 
@@ -453,8 +470,8 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
         # Check that all input arrays have the same length
         if len(logg_values) != len(ir_index_values) or len(logg_values) != len(HCO_data):
             raise ValueError("All input arrays must have the same length.")
-        is_numeric = [not math.isnan(x) and x>0.4 for x in HCO_data]
-        is_nan = [math.isnan(x) or x<0.4 for x in HCO_data]
+        is_numeric = [not math.isnan(x) and x>0.2 for x in HCO_data]
+        is_nan = [math.isnan(x) or x<0.2 for x in HCO_data]
         # print()
         # molecular_data=HCO_data
         # min_val= -2
@@ -464,8 +481,8 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
         if len(logg_values) != len(ir_index_values) or len(logg_values) != len(C18O_data):
             raise ValueError("All input arrays must have the same length.")
 
-        is_numeric = [not math.isnan(x) and x>0.4 for x in C18O_data]
-        is_nan = [math.isnan(x) or x<0.4 for x in C18O_data]
+        is_numeric = [not math.isnan(x) and x>0.2 for x in C18O_data]
+        is_nan = [math.isnan(x) or x<0.2 for x in C18O_data]
         # is_numeric = [not math.isnan(x) for x in C18O_data]
         # is_nan = [math.isnan(x) for x in C18O_data]
         # molecular_data=C18O_data
@@ -509,27 +526,30 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'WLY2-42'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    source_name = 'IRAS05379-0758'
+    molecule ='HCO+'
+    # molecule ='C18O'
 
-    calculate_concentration_factor(source_name, molecule, n_sigma=1)
+    # calculate_concentration_factor(source_name, molecule, n_sigma=1)
 
-    # save_concentration_factors_to_file(folder_fits='sdf_and_fits', molecule=molecule,save_filename='concentrations_'+molecule+'.txt')
+    # save_concentration_factors_to_file(folder_fits='sdf_and_fits',
+    #                                    molecule=molecule,
+    #                                    save_filename='concentrations_'+ today + '_' + hour_now + '_' + molecule+'.txt')
+
     # plot_parameters(filename='text_files/Class_I_for-JCMT-plots.txt',molecule=molecule,save=True)
 
     # plot_gravity_vs_spectral_index(filename='text_files/Class_I_for-JCMT-plots.txt', color_map='viridis',
     #                                molecule=molecule,save=True)
 
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='ir_index',
-    #                                molecule=molecule,save=True)
+    #                                molecule=molecule,save=False)
 
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
     #                                molecule=molecule,save=False)
 
-    # make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt'
-    #                              , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
-    #                              molecule='HCO+', save=True)
+    make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
+                                 , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
+                                 parameter='gravity',molecule='HCO+', save=False)
 
     # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
     #                                 map_file='spectrum_parameters_'+molecule+'.txt',molecule=molecule,save=True)

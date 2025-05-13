@@ -143,14 +143,17 @@ def make_averaged_spectrum_data(source_name, molecule):
 
 
     velocity = data_cube.vel
-    cube = data_cube.ppv_data
+    cube = data_cube.ppv_data#[:,5:-5,5:-5]
+
+    # plt.imshow(np.nansum(cube,axis=0))
+    # plt.show()
 
     averaged_spectrum = np.nanmean(cube, axis=(1,2))
 
     return averaged_spectrum, velocity
 
 
-def make_central_spectrum_data(source_name, molecule):
+def make_central_spectrum_data(source_name, molecule,noskycoord=False):
     """
     Average spectrum of the central beam.
 
@@ -180,16 +183,16 @@ def make_central_spectrum_data(source_name, molecule):
     velocity = data_cube.vel
 
 
-    #### Only use this if there is a problem with WCS and you need to calculate the spectrum at the center.
-    # ra_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[0]
-    # dec_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[1]
-    # skycoord_object = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
-    # print(skycoord_object)
+    if noskycoord:
+        print('I am not using the skycoordinates of the object, instead taking the\\ spectrum from the central pixels')
+        #### Only use this if there is a problem with WCS and you need to calculate the spectrum at the center.
+        ra_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[0]
+        dec_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[1]
+        skycoord_object = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
+        print(skycoord_object)
 
     # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
     x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
-
-
 
 
     print(f"These are the sky coordinates of your {source_name}: ", skycoord_object)
@@ -216,7 +219,7 @@ def make_central_spectrum_data(source_name, molecule):
     return average_spectrum, velocity
 
 
-def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
+def retrieve_and_write_spectral_properties(source_name, molecule, plot=True,noskycoord=False):
     """
     This is a preparatory step where a gaussian is fitted to the spectrum
     so the central wavelength position, the FWHM and other parameters are known
@@ -232,20 +235,18 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     # try:
     #### First fit the spectrum retrieved from the whole cube
     spectrum_fov, velocity_fov = make_averaged_spectrum_data(source_name, molecule)
-    pos_fov, FHWM_fov, sigma_fov = fit_gaussian_to_spectrum(spectrum_fov, velocity_fov,velo_range=[-30,30] ,plot=plot)
+    pos_fov, FHWM_fov, sigma_fov = fit_gaussian_to_spectrum(spectrum_fov, velocity_fov,
+                                                            velo_range=[-30,30] ,plot=plot,
+                                                            source_name=source_name+'_FOV',molecule=molecule)
     # rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
-    vmin_fov = pos_fov - 10*abs(sigma_fov)
-    vmax_fov = pos_fov + 10*abs(sigma_fov)
-
-
-    integrated_intensity_fov = integrate_flux_over_velocity(velocities=velocity_fov, flux=spectrum_fov,
-                                                                  v_min=pos_fov - 5*abs(sigma_fov),
-                                                                  v_max=pos_fov + 5*abs(sigma_fov))
+    # pos_fov=23.0
+    vmin_fov = pos_fov - 15*abs(sigma_fov)
+    vmax_fov = pos_fov + 15*abs(sigma_fov)
 
 
     ### Obtain spectral properties from fitting a gaussian to the central spectra
-    spectrum, velocity = make_central_spectrum_data(source_name, molecule)
+    spectrum, velocity = make_central_spectrum_data(source_name, molecule,noskycoord=noskycoord)
 
     LB_idx_noise_low, LB_idx_noise_high = find_nearest_index(velocity, -50), find_nearest_index(velocity, vmin - 10)
     UB_idx_noise_low, UB_idx_noise_high = find_nearest_index(velocity, vmax + 10), find_nearest_index(velocity, 50)
@@ -253,18 +254,27 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
     line_noise = (np.nanstd(spectrum[LB_idx_noise_low:LB_idx_noise_high]) +
                   np.nanstd(spectrum[UB_idx_noise_low:UB_idx_noise_high])) / 2.
 
+    integrated_intensity_fov, uncertainty_int_intensity_fov = integrate_flux_over_velocity(velocities=velocity_fov, flux=spectrum_fov,
+                                                                  v_min=pos_fov - 3*abs(sigma_fov),
+                                                                  v_max=pos_fov + 3*abs(sigma_fov),
+                                                                                       rms_noise=line_noise)
     print('Line noise = ', line_noise)
 
     try:
-        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[vmin_fov,vmax_fov], plot=plot)
+        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,
+                                                    velo_range=[vmin_fov,vmax_fov], plot=plot,
+                                                    source_name=source_name + '_central', molecule=molecule,
+                                                    position_guess=pos_fov, sigma_guess=sigma_fov)
+                                                    # position_guess = 15, sigma_guess = 1)
+
         rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
 
         # filename = source_name + '_' + molecule  # 'V347_Aur_HCO+'
         # data_cube = DataAnalysis(os.path.join('sdf_and_fits', source_name), filename + '.fits')
 
-        vmin = pos - 5*abs(sigma)
-        vmax = pos + 5*abs(sigma)
+        vmin = pos - 3*abs(sigma)
+        vmax = pos + 3*abs(sigma)
 
         ### Calculate the peak emission of the line,
         idx_line_low,idx_line_high = find_nearest_index(velocity,vmin),find_nearest_index(velocity,vmax)
@@ -280,10 +290,11 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
 
         line_SNR = round(Tmb/line_noise,2)
         ### Get the integrated intensity from the spectrum
-        integrated_intensity_main_beam = integrate_flux_over_velocity(velocities=velocity, flux=spectrum,
-                                                                      v_min=vmin, v_max=vmax)
+        integrated_intensity_main_beam, uncertainty_integ_intensity_main_beam = \
+            integrate_flux_over_velocity(velocities=velocity, flux=spectrum,
+                                         v_min=vmin, v_max=vmax,rms_noise=line_noise)
 
-
+        print('this is integrated flux and uncertainty',integrated_intensity_main_beam,uncertainty_integ_intensity_main_beam)
         #### Get noise & peak SNR from the cube
         peak_signal_in_cube, average_noise_images = calculate_peak_SNR(fits_file_name,source_name=source_name,
                                                                    velo_limits=[vmin, vmax], separate=True)
@@ -296,6 +307,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         print(f"An error occurred: {err}")
 
         Tmb = 0.0
+        uncertainty_integ_intensity_main_beam = 0.0
         integrated_intensity_main_beam = 0.0
         integrated_intensity_fov = 0.0
         rounded_vel_pos, rounded_FHWM, rounded_sigma = 0.0,0.0,0.0
@@ -309,17 +321,18 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True):
         image_noise_level = 0.0
         peak_SNR = 0.0
 
-    if plot:
-        print('the integrated intensity is ', integrated_intensity_main_beam)
-        plt.plot(velocity,spectrum)
-        plt.axvline(vmin)
-        plt.axvline(vmax)
-        plt.show()
+    # if plot:
+    #     print('the integrated intensity is ', integrated_intensity_main_beam)
+    #     plt.plot(velocity,spectrum)
+    #     plt.axvline(vmin)
+    #     plt.axvline(vmax)
+    #     plt.show()
 
     # Prepare the values for writing/updating
     values_to_text = [
         source_name, image_noise_level, peak_SNR, line_noise, Tmb, line_SNR , rounded_vel_pos, rounded_FHWM,
-        rounded_sigma, integrated_intensity_main_beam, integrated_intensity_fov, molecule]
+        rounded_sigma, integrated_intensity_main_beam, uncertainty_integ_intensity_main_beam,
+                         integrated_intensity_fov, uncertainty_int_intensity_fov, molecule]
 
     # Call write_or_update_values to save the data
     write_or_update_values(file_name='spectrum_parameters_' + molecule + '.txt', new_values=values_to_text)
@@ -999,7 +1012,7 @@ def mass_calculate_spectral_properties(folder_fits, molecule):
                 print(f"No such file: {fits_file_path}. Skipping this folder.")
                 continue  # Move to the next folder if the file doesn't exist
 
-            retrieve_and_write_spectral_properties(sources, molecule,plot=False)
+            retrieve_and_write_spectral_properties(sources, molecule,plot=True)
 
         except IndexError as err:
             print(f"An error occurred: {err}")
@@ -1011,13 +1024,12 @@ def mass_calculate_spectral_properties(folder_fits, molecule):
 
 if __name__ == "__main__":
 
-    source_name = 'Elia32'
-    # source_name = 'T-Tauri'
+    source_name = 'DoAr43'
+    # source_name = 'DG-Tau'
     # molecule ='HCO+'
     molecule ='C18O'
-
     ## Step 0
-    # retrieve_and_write_spectral_properties(source_name, molecule)
+    retrieve_and_write_spectral_properties(source_name, molecule, noskycoord=False)
 
     ### Step 1 creates a plot of the spectrum
     # plot_spectrum(source_name, molecule,type='central',save=True)

@@ -275,8 +275,8 @@ def integrated_intensity(path, filename):
 if __name__ == "__main__":
 
     ### Step 1 source name
-    containing_folder='Archival'
-    source_name = 'WLY2-42'
+    containing_folder='M25AP032'
+    source_name = 'DoAr43'
     # molecule ='HCO+'
     molecule ='C18O'
     # molecule ='12CO'
@@ -285,14 +285,14 @@ if __name__ == "__main__":
 
     ### Step 2
     #### Get the shell script for moment map preparation
-    # path_to_folder=containing_folder+'/'+source_name+'/'+molecule+'/reduced/'
-    # full_path_for_sdf= os.path.join('/Users/christianflores/Documents/work/Astronomy_data/JCMT',path_to_folder)
+    path_to_folder=containing_folder+'/'+source_name+'/'+molecule+'/reduced/'
+    full_path_for_sdf= os.path.join('/Users/christianflores/Documents/work/Astronomy_data/JCMT',path_to_folder)
 
-    # sdf_file_name= find_approximate_file(full_path_for_sdf, target_name='ga20_0p20bin001.sdf', similarity_threshold=0.6)
+    sdf_file_name= find_approximate_file(full_path_for_sdf, target_name='ga20_0p20bin001.sdf', similarity_threshold=0.6)
 
-    # create_shell_script_moment_maps(path_to_folder,sdf_name=sdf_file_name,
-    #                                 source_name=source_name,molec=molecule)
-    # run_moment_map_shell_script(path_to_folder='.')
+    create_shell_script_moment_maps(path_to_folder,sdf_name=sdf_file_name,
+                                    source_name=source_name,molec=molecule)
+    run_moment_map_shell_script(path_to_folder='.')
 
     ### Step 3
     ### run the BTS to create moment maps

@@ -50,28 +50,36 @@ def calculate_peak_SNR(filename,source_name, velo_limits=[2, 10], separate=False
     return round(peak_signal_in_cube / average_noise_images, 1)
 
 
-def integrate_flux_over_velocity(velocities, flux, v_min, v_max):
+def integrate_flux_over_velocity(velocities, flux, v_min, v_max, rms_noise):
     """
-    Integrates the flux over a specified velocity range using the trapezoidal rule.
+    Integrates the flux and estimates the uncertainty of the integrated intensity.
 
-    :param velocities: Array of velocities (same length as flux array)
+    :param velocities: Array of velocities
     :param flux: Array of flux values
-    :param v_min: Minimum velocity of the range
-    :param v_max: Maximum velocity of the range
-    :return: The integrated flux over the specified velocity range
+    :param v_min: Minimum velocity
+    :param v_max: Maximum velocity
+    :param rms_noise: RMS noise per channel (same units as flux)
+    :return: (integrated_flux, uncertainty)
     """
-
-    # Find indices corresponding to the velocity range
+    # Select the velocity range
     indices_in_range = np.where((velocities >= v_min) & (velocities <= v_max))[0]
-
-    # Extract the corresponding velocities and flux values
     velocities_in_range = velocities[indices_in_range]
     flux_in_range = flux[indices_in_range]
 
-    # Perform numerical integration using the trapezoidal rule
+    # Integration using trapezoidal rule
     integrated_flux = np.trapz(flux_in_range, velocities_in_range)
 
-    return integrated_flux
+    # Calculate channel widths
+    dv = np.diff(velocities_in_range)
+
+    if len(dv) == 0:
+        uncertainty = 0.0  # Only one channel
+    else:
+        # Append last dv to match number of channels (approximate)
+        dv_full = np.append(dv, dv[-1])
+        uncertainty = np.sqrt(np.sum((rms_noise * dv_full) ** 2))
+
+    return integrated_flux, uncertainty
 
 
 
@@ -103,8 +111,10 @@ def write_or_update_values(file_name, new_values):
         f"{new_values[7]:<15.3f}"  # FWHM with 3 decimal places in 10 bytes
         f"{new_values[8]:<15.3f}"  # Sigma with 3 decimal places in 10 bytes
         f"{new_values[9]:<15.3f}"  # Integrated intensity with 3 decimal places in 10 bytes
-        f"{new_values[10]:<15.3f}"  # Integrated intensity with 3 decimal places in 10 bytes
-        f"{new_values[11]:<15}"  # Molecule in 10 bytes
+        f"{new_values[10]:<15.3f}"  # uncertainty Integrated intensity with 3 decimal places in 10 bytes
+        f"{new_values[11]:<15.3f}"  # Integrated intensity with 3 decimal places in 10 bytes
+        f"{new_values[12]:<15.3f}"  # uncertainty Integrated intensity with 3 decimal places in 10 bytes
+        f"{new_values[13]:<15}"  # Molecule in 10 bytes
     )
 
     # Read the file if it exists, otherwise start with a header
@@ -125,7 +135,9 @@ def write_or_update_values(file_name, new_values):
             f"{'FWHM ':<15}"
             f"{'Sigma':<15}"
             f"{'Integ.Beam.':<15}"
+            f"{'Unc.Integ.Beam.':<15}"
             f"{'Integ.FOV.':<15}"
+            f"{'Unc.Integ.FOV.':<15}"
             f"{'Molecule':<15}\n"
         )
 
@@ -140,6 +152,8 @@ def write_or_update_values(file_name, new_values):
             f"{'(km/s)':<15}"
             f"{'(km/s)':<15}"
             f"{'(km/s)':<15}"
+            f"{'(K * km/s)':<15}"
+            f"{'(K * km/s)':<15}"
             f"{'(K * km/s)':<15}"
             f"{'(K * km/s)':<15}"
             f"{'-':<15}\n"
@@ -183,23 +197,31 @@ def gauss(x, H, A, x0, sigma):
     """
     return H + A * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
-def gauss_fit(xdata, ydata):
+def gauss_fit(xdata, ydata, position_guess=None, sigma_guess=None):
     """
     Fit a Gaussian giving some initial parameters
+    This one should take a guess specially if it is the central one,
+    where the guess is the FOV velocity position and gaussian width.
+
     compute the parameters of the gauss() function
     :param xdata: wavelength array
     :param ydata: flux array
     :return: only sigma and center position
     """
-    sigma_guess = 1
-    index_position=find_nearest_index(ydata,np.nanmax(ydata))
-    position_guess = xdata[index_position]
-    popt, pcov = curve_fit(gauss, xdata, ydata, p0=[min(ydata), max(ydata), position_guess, sigma_guess])
+    if position_guess is None:
+        index_position = find_nearest_index(ydata, np.nanmax(ydata))
+        position_guess = xdata[index_position]
+    if sigma_guess is None:
+        sigma_guess = 1
 
+    popt, pcov = curve_fit(gauss, xdata, ydata, p0=[min(ydata), max(ydata), position_guess, sigma_guess])
+    # print('THIS IS THE POSITION OF THE GAUSSIAN')
+    # print(position_guess)
     return popt
 
 
-def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=True,save=False):
+def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=True,
+                        save=True, source_name='', molecule='',position_guess=None, sigma_guess=None):
     '''
     Compute the std an center position of a gaussian
     starting from the datacube
@@ -220,7 +242,7 @@ def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=
         shortened_vel = velax[broad_upper_idx:broad_lower_idx]
         shortened_flux = spectrum[broad_upper_idx:broad_lower_idx]
 
-    H, A, x0, sigma = gauss_fit(shortened_vel,shortened_flux)
+    H, A, x0, sigma = gauss_fit(shortened_vel,shortened_flux,position_guess=position_guess, sigma_guess=sigma_guess)
 
     if abs(sigma) > 50 or abs(H)>10:
         H = 0
@@ -243,27 +265,27 @@ def spectrum_properties(spectrum,velax,velocity_min, velocity_max,nsigma=3,plot=
         plt.axvline(x=x0+nsigma*sigma,color='red',label=r'$\pm$'+str(nsigma)+r'$\sigma$')
         plt.axvline(x=x0-nsigma*sigma,color='red')
         plt.legend()
-        plt.title('Gaussian fit,  $f(x) = A e^{(-(x-x_0)^2/(2sigma^2))}$')
+        plt.title('Gaussian fit for '+ source_name+' mol '+molecule+',  $f(x) = A e^{(-(x-x_0)^2/(2sigma^2))}$')
         plt.xlabel('velocity')
         plt.ylabel('Intensity (A)')
+        # plt.xlim(x0-nsigma*sigma*2,x0+nsigma*sigma*2)
         if save:
-            try:
-                plt.savefig(os.path.join('fitting_line', filename1.strip('.fits') + '_spectrum_fit.png'),
-                            bbox_inches='tight',
-                            transparent=False)
-            except:
-                plt.savefig(os.path.join('fitting_line', filename2.strip('.fits') + '_spectrum_fit.png'),
-                            bbox_inches='tight',
-                            transparent=False)
+            folder_path='/Users/christianflores/Documents/GitHub/JCMT/Figures/Spectra/'+molecule+'/Gaussian-Fit/'
+            plt.savefig(os.path.join(folder_path, source_name+'_'+ molecule+ '_spectrum_fit.png'),
+                        bbox_inches='tight',
+                        transparent=False)
         plt.show()
 
     return  x0, FWHM, sigma
 
-def fit_gaussian_to_spectrum(spectrum,velocity,velo_range=[-30,30],plot=True):
+def fit_gaussian_to_spectrum(spectrum,velocity,velo_range=[-30,30],plot=True,source_name='',
+                             molecule='',position_guess=None, sigma_guess=None):
 
     velocity_min,velocity_max= velo_range[0],velo_range[1]
     position, FWHM, sigma = spectrum_properties(spectrum, velocity, velocity_min=velocity_min,
-                                          velocity_max=velocity_max, nsigma=3, plot=plot)
+                                          velocity_max=velocity_max, nsigma=3, plot=plot,
+                                                source_name=source_name,molecule=molecule,
+                                                    position_guess = position_guess, sigma_guess =sigma_guess)
 
     return position, FWHM, sigma
 

@@ -1,6 +1,9 @@
 import pandas as pd
 import re
-
+from datetime import date,datetime
+today = str(date.today())
+currentDateAndTime = datetime.now()
+hour_now = str(currentDateAndTime.hour)
 
 def normalize_ra_dec(value):
     """
@@ -59,7 +62,8 @@ def create_latex_table_concentration_factor(file_path, output_file):
 
     # Ensure the column names match the table structure
     expected_columns = [
-        "Source Name", "HCO+_concentration", "C18O_concentration", "Integ.Beam.HCO+", "Integ.Beam.C18O", "Interpretation", "Note"
+        "Source Name", "HCO+_concentration", "C18O_concentration", "Integ.Beam.HCO+", "Unce.Beam.HCO+",
+        "Integ.Beam.C18O", "Unce.Beam.C18O","Interpretation", "Note"
     ]
 
     for col in expected_columns:
@@ -69,16 +73,18 @@ def create_latex_table_concentration_factor(file_path, output_file):
     # Begin LaTeX table
     latex_table = r"""
 \begin{deluxetable*}{lcccccc}
-\tablecaption{Summary of protostellar properties \label{tab:observation_info}}
+\tablecaption{Concentration factors and envelope interpretation\label{tab:concentration_table}}
 \tablecolumns{8}
 %\tablenum{1}
 %\tablewidth{30pt}
 \tabletypesize{\footnotesize}
 \tablehead{
-\colhead{Source Name} & \colhead{HCO+ concentration} & \colhead{C18O concentration} & \colhead{Integ. Beam. HCO+} & 
- \colhead{Integ. Beam. C18O} & \colhead{Interpretation} & \colhead{Note} \\
-\colhead{} & \colhead{ } & \colhead{ } & \colhead{(K km/s)} & 
-& \colhead{(K km/s)} & \colhead{ } & \colhead{ }
+\colhead{Source Name} & \colhead{HCO$^+$} & \colhead{C$^{18}$O} & \colhead{Integrated} &
+ \colhead{Integrated} & \colhead{Interpretation} & \colhead{Note} \\
+\colhead{ } & \colhead{concentration} & \colhead{concentration} & \colhead{intensity HCO$^+$} &
+ \colhead{intensity C$^{18}$O} & \colhead{} & \colhead{}\\
+\colhead{} & \colhead{ factor } & \colhead{factor} & \colhead{(K km/s)} &
+\colhead{(K km/s)} & \colhead{ } & \colhead{ }
 }
 %\colnumbers
 \startdata
@@ -86,20 +92,22 @@ def create_latex_table_concentration_factor(file_path, output_file):
 
     # Add rows from the DataFrame
     for _, row in df.iterrows():
-        latex_table += f"    {row['Source Name']} & {row['HCO+_concentration']} & {row['C18O_concentration']} & {row['Integ.Beam.HCO+']} & {row['Integ.Beam.C18O']} & {row['Interpretation']} & {row['Note']} \\\\ \n"
+        latex_table += f"    {row['Source Name']} & {row['HCO+_concentration']} & {row['C18O_concentration']} " \
+                       f"& {row['Integ.Beam.HCO+']} \pm {row['Unce.Beam.HCO+']} & " \
+                       f"{row['Integ.Beam.C18O']} \pm {row['Unce.Beam.C18O']} & {row['Interpretation']} & {row['Note']} \\\\ \n"
 
     # End LaTeX table
     latex_table += r"""
 \enddata
-\tablecomments{References for the A$_v$ value are given in the last column. }
+\tablecomments{Columns 2 and 5 are concentration factors. Columns 3 and 4 are the integratined intensity within the central beam.}
 \end{deluxetable*}
 """
 
     # Write the LaTeX table to the output file
-    with open(output_file, "w") as f:
+    with open(output_file+ '_' + today + '_' + hour_now+'.tex', "w") as f:
         f.write(latex_table)
 
-    print(f"LaTeX table saved to {output_file}.")
+    print(f"LaTeX table saved to {output_file+ '_' + today + '_' + hour_now}.")
 
 
 def create_latex_table_spectral_parameters(file_path, output_file):
@@ -157,10 +165,10 @@ def create_latex_table_spectral_parameters(file_path, output_file):
 """
 
     # Write the LaTeX table to the output file
-    with open(output_file, "w") as f:
+    with open(output_file+ '_' + today + '_' + hour_now+'.tex', "w") as f:
         f.write(latex_table)
 
-    print(f"LaTeX table saved to {output_file}.")
+    print(f"LaTeX table saved to {output_file+ '_' + today + '_' + hour_now}.")
 
 def create_latex_table_obs_parameters(file_path, output_file):
     """
@@ -224,18 +232,18 @@ def create_latex_table_obs_parameters(file_path, output_file):
 """
 
     # Write the LaTeX table to the output file
-    with open(output_file, "w") as f:
+    with open(output_file+ '_' + today + '_' + hour_now+'.tex', "w") as f:
         f.write(latex_table)
 
-    print(f"LaTeX table saved to {output_file}.")
+    print(f"LaTeX table saved to {output_file+ '_' + today + '_' + hour_now}.")
 
 
 
 if __name__ == "__main__":
 
     # Example Usage
-    file_path = "JCMT_spectral_table_for_paper_April_9_2025.xlsx"  # Replace with the path to your Excel or CSV file
-    output_file = "protostellar_spectral_table_April_9_2025.tex"  # Replace with the desired LaTeX output file name
+    file_path = "sheets_and_latex/May-2025/JCMT_concentration_table_for_paper.xlsx"  # Replace with the path to your Excel or CSV file
+    output_file = "sheets_and_latex/May-2025/protostellar_concentration_table"  # Replace with the desired LaTeX output file name
     # create_latex_table_obs_parameters(file_path, output_file)
-    create_latex_table_spectral_parameters(file_path, output_file)
-    # create_latex_table_concentration_factor(file_path, output_file)
+    # create_latex_table_spectral_parameters(file_path, output_file)
+    create_latex_table_concentration_factor(file_path, output_file)
