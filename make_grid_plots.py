@@ -4,6 +4,9 @@ import os
 import numpy as np
 import glob
 from datetime import date,datetime
+import matplotlib.gridspec as gridspec
+from PIL import Image, ImageOps
+
 today = str(date.today())
 currentDateAndTime = datetime.now()
 hour_now = str(currentDateAndTime.hour)
@@ -24,87 +27,52 @@ def read_file(folder,filename):
 
     return star_name,one_sigma_c_factor,three_sigma_c_factor
 
-def plot_images_grid3(image_dir, num_columns=3, max_sources=None,ini_num=None, output_file=None):
-    """
-    Creates a single plot with a grid of Nx3 images, ensuring consistent size and specific order.
-    Displays blank plots for missing images and adds subfolder names rotated on the left of the grid.
+def pad_to_square(img, fill_color='white'):
+    """Pads an image to make it square without distortion."""
+    max_dim = max(img.size)
+    padding = [(max_dim - s) // 2 for s in img.size]
+    extra = [(max_dim - s) % 2 for s in img.size]
+    return ImageOps.expand(img, (padding[0], padding[1], padding[0] + extra[0], padding[1] + extra[1]), fill=fill_color)
 
-    Args:
-        image_dir (str): Path to the main directory containing subfolders of images.
-        num_columns (int): Number of columns for the grid (default is 3).
-        max_sources (int): Maximum number of sources (subfolders) to process. If None, process all sources.
-        ini_num (int): indicate the initial one If None, process all sources.
-        output_file (str): Path to save the output plot. If None, the plot will be displayed.
-    """
-    # Get the list of subfolders
+def plot_images_grid3(image_dir, num_columns=3, max_sources=None, ini_num=0, output_file=None):
     subfolders = sorted([sf for sf in os.listdir(image_dir) if os.path.isdir(os.path.join(image_dir, sf))])
+    subfolders = subfolders[ini_num:ini_num + max_sources] if max_sources else subfolders
 
-    # Limit the number of subfolders if max_sources is specified
-    if max_sources is not None:
-        subfolders = subfolders[ini_num:max_sources+ini_num]
-        print(subfolders)
-
-    # Initialize data for the grid
-    ordered_images = []
+    image_paths = []
     folder_labels = []
     for subfolder in subfolders:
-        subfolder_path = os.path.join(image_dir, subfolder)
-        # Get .png files from the subfolder
-        image_files = sorted([f for f in os.listdir(subfolder_path) if f.endswith('.png')])
+        path = os.path.join(image_dir, subfolder)
+        images = sorted([f for f in os.listdir(path) if f.endswith('.png')])
+        row = [min(images, key=len, default=None),
+               next((f for f in images if "HCO+" in f), None),
+               next((f for f in images if "C18O" in f), None)]
+        image_paths.extend([os.path.join(path, f) if f else None for f in row])
+        folder_labels.append(subfolder)
 
-        # Order images: Shortest name -> Contains "HCO+" -> Contains "C18O"
-        short_name = min(image_files, key=len, default=None)
-        hco_file = next((f for f in image_files if "HCO+" in f), None)
-        c18o_file = next((f for f in image_files if "C18O" in f), None)
-
-        # Add ordered images for this subfolder (with placeholders for None)
-        row_images = [short_name, hco_file, c18o_file]
-        ordered_images.extend([os.path.join(subfolder_path, img) if img else None for img in row_images])
-        folder_labels.append(subfolder)  # Store subfolder name for labeling
-
-    # Calculate the number of rows
     num_rows = len(folder_labels)
-    total_cells = num_rows * num_columns
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(num_columns * 3, num_rows * 3.2), gridspec_kw={'width_ratios': [0.8, 1, 1]})
+    axes = axes.flatten()
 
-    # Create the figure and axes
-    fig, axes = plt.subplots(num_rows, num_columns, figsize=(num_columns * 3.0, num_rows * 3.2), constrained_layout=False)
-    axes = axes.flatten()  # Flatten for easier iteration
-
-    # Plot the images
     for i, ax in enumerate(axes):
-        if i < len(ordered_images):
-            img_path = ordered_images[i]
-            if img_path:  # If an image exists, display it
-                img = mpimg.imread(img_path)
-                ax.imshow(img)  # Ensure consistent image size
-            else:  # Display a blank plot for missing images
-                ax.set_facecolor("white")
-        ax.axis('off')  # Turn off axes
+        ax.axis('off')
+        if i < len(image_paths) and image_paths[i]:
+            img = Image.open(image_paths[i])
+            img = pad_to_square(img).resize((900, 900))
+            ax.imshow(np.asarray(img))
+            ax.set_aspect('equal')
 
-    # Add subfolder names rotated 90 degrees on the left
-    for row_idx, folder_label in enumerate(folder_labels):
-        fig.text(
-            x=0.1,  # X-position of the label (adjust if needed)
-            y=1 - (row_idx + 1.5) / (num_rows+2),  # Dynamically align to row center
-            s=folder_label,
-            va='center',  # Vertically align the text to the center of the row
-            ha='center',  # Horizontally center the text
-            rotation=90,  # Rotate 90 degrees
-            fontsize=10,
-            color='black'
-        )
+    for idx, label in enumerate(folder_labels):
+        fig.text(0.11, 0.95 - 0.775*(idx + 1.0) / num_rows, label, va='center', ha='right', rotation=90, fontsize=10)
 
-    # Adjust the spacing between images
-    plt.subplots_adjust(wspace=0.005, hspace=0.01)
-    # Adjust the spacing between images
-    # plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1, wspace=0.02, hspace=0.01)
+    fig.subplots_adjust(wspace=0.01, hspace=0.01)
 
-    # Save or display the plot
     if output_file:
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        print(f"Grid plot saved to {output_file}.")
+        now = datetime.now().strftime("%Y%m%d_%H%M")
+        plt.savefig(f"{output_file}{now}.png", dpi=600, bbox_inches='tight')
+        print(f"Grid plot saved to {output_file}{now}.png")
 
     plt.show()
+
 
 
 def plot_images_grid(image_dir, c_factor_folder, c_factor_file, grid_shape=(5, 6), output_file=None, c_factor_sorted=False):
@@ -212,17 +180,19 @@ def plot_images_grid(image_dir, c_factor_folder, c_factor_file, grid_shape=(5, 6
 if __name__ == "__main__":
 
     c_factor_folder= 'text_files'
-    c_factor_file='concentrations_C18O.txt'
-    # c_factor_file='concentrations_HCO+.txt'
+    # c_factor_file='concentrations_C18O.txt'
+    c_factor_file='concentrations_HCO+.txt'
 
     # image_directory = "./Figures/Spectra/HCO+/central/"  # Replace with the directory containing your .png files
-    # image_directory = "./Figures/gallery_images/"  # Replace with the directory containing your .png files
-    image_directory = "./Figures/Moment_maps/moment-zero/C18O_offset_1-sigma/outside_center_emission/"  # Replace with the directory containing your .png files
+    image_directory = "./Figures/gallery_images/"  # Replace with the directory containing your .png files
+    # image_directory = "./Figures/Moment_maps/moment-zero/C18O_offset_1-sigma/outside_center_emission/"  # Replace with the directory containing your .png files
 
-    grid_shape = (2, 4)  # Grid of 5 rows and 6 columns
+    # grid_shape = (5,4)  # Grid of 5 rows and 6 columns
 
-    plot_images_grid(image_directory, c_factor_folder, c_factor_file, grid_shape,
-                     output_file="./Figures/grid_plots/grid_plot_no_source",c_factor_sorted=True)
+    # plot_images_grid(image_directory, c_factor_folder, c_factor_file, grid_shape,
+    #                  output_file="./Figures/grid_plots/grid_plot_no_source",c_factor_sorted=True)
     # plot_same_source_grid(image_directory,  grid_shape, output_file="./Figures/grid_plot_per_source")
-    # plot_images_grid3(image_directory, num_columns=3, max_sources=5, ini_num=5, output_file='second_batch')
+
+    # y_offsets = [[0.01, 0, 0] for _ in range(5)]
+    plot_images_grid3(image_directory, num_columns=3, max_sources=6, ini_num=18, output_file='test4_')
 

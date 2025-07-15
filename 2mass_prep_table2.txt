@@ -1,0 +1,5 @@
+|  id         |    ra         |     dec       | best   |  size   |
+|   char      |     double    |     double    | char   | double  |
+|             |     deg       |     deg       |        | arcsec  |
+|  null       |  null         |  null         |  null  |  null   |
+ [EC92] 92      277.491075      1.21427777778   y        180      

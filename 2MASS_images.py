@@ -1,5 +1,6 @@
-import astropy
+# import astropy
 from astropy.visualization import *#make_lupton_rgb#, make_rgb
+# from astropy import visualization.make_rgb
 from astropy.io import fits
 from astropy.utils.data import get_pkg_data_filename
 import numpy as np
@@ -10,6 +11,11 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from plot_generation_JCMT import find_simbad_source_in_file, get_icrs_coordinates
 import os
+
+'''
+2MASS images need to be donwloaded from here. typically sub-image size is 120''
+https://irsa.ipac.caltech.edu/applications/2MASS/IM/interactive.html
+'''
 
 def offset_coordinates(ax,skycoord_object):
     ra = ax.coords['ra']
@@ -26,6 +32,7 @@ def offset_coordinates(ax,skycoord_object):
     # lon.set_coord_type('longitude', 180)
     lon.set_format_unit(u.arcsec)
     # lon.set_ticklabel(rotation=, pad=2)
+    lon.set_ticklabel(size=12)
     lon.set_ticks_position('b')
     lon.set_ticklabel_position('b')
     lon.set_axislabel_position('b')
@@ -33,16 +40,29 @@ def offset_coordinates(ax,skycoord_object):
 
     lat = overlay['lat']
     lat.set_format_unit(u.arcsec)
-    lat.set_ticklabel()
+    lat.set_ticklabel(size=12)
     lat.set_ticks_position('l')
     lat.set_ticklabel_position('l')
     lat.set_axislabel_position('l')
 
-    lon.set_axislabel(r'$\Delta$RA',size=12)
-    lat.set_axislabel(r'$\Delta$DEC',size=12)
+    # lon.set_axislabel(r'$\Delta$RA',size=12)
+    # lat.set_axislabel(r'$\Delta$DEC',size=12)
 
-    # lat.set_axislabel(text=' ')
-    # lon.set_axislabel(text=' ')
+    lon.set_axislabel(None)
+    lat.set_axislabel(None)
+
+    lon.set_auto_axislabel(False)
+    lat.set_auto_axislabel(False)
+    lon.set_axislabel('')
+    lat.set_axislabel('')
+    ra.set_axislabel('')
+    dec.set_axislabel('')
+    # lat.set_ticklabel_visible(False)
+    # lon.set(xlabel=None)
+
+
+    # fig1.set_xticklabels([])
+    # fig1.set_yticklabels([])
 
 
 def apply_threshold_correction(array, lower_threshold):
@@ -104,7 +124,7 @@ def histograms():
     plt.yscale('log')
     plt.show()
 
-def twomass_image_to_png(fits_files,source_name,plot=True):
+def twomass_image_to_png(fits_files,source_name,plot=True, pctl= 100):
 
     J_data,H_data,K_data,wcs = open_files(fits_files,source_name)
 
@@ -122,7 +142,7 @@ def twomass_image_to_png(fits_files,source_name,plot=True):
     plt.figure(figsize=(6, 7))
     fig1 = plt.subplot(projection=wcs)
 
-    pctl = 98.5
+    # pctl = 99.0
     maximum = 0
 
     for img in [new_i,new_r,new_g]:
@@ -137,7 +157,8 @@ def twomass_image_to_png(fits_files,source_name,plot=True):
 
     offset_coordinates(fig1, skycoord_object)
 
-    plt.savefig('Figures/2MASS/'+source_name+'_upper_98p5.png')
+
+    plt.savefig('Figures/2MASS/'+source_name+'_upper_'+str(pctl).replace('.','p')+'.png', bbox_inches='tight',dpi=300)
     # plt.axis('square')
 
     if plot:
@@ -226,7 +247,7 @@ def prepare_sources_to_download(source_name):
 
     save_to_file(save_filename='2mass_prep_table2.txt',new_values=values)
 
-def mass_produce_2mass_images(folder):
+def mass_produce_2mass_images(folder, pctl= 100):
     folder_list = sorted(next(os.walk(folder))[1])  # List of subfolders
     print("Folders found:", folder_list)
 
@@ -242,7 +263,7 @@ def mass_produce_2mass_images(folder):
                 continue  # Move to the next folder if the file doesn't exist
 
             # Generate 2MASS image
-            twomass_image_to_png(folder, sources,plot=False)
+            twomass_image_to_png(folder, sources,plot=False,pctl=pctl)
 
         except IndexError as err:
             print(f"Map for {sources} was not produced. Check the moment maps.")
@@ -251,11 +272,17 @@ def mass_produce_2mass_images(folder):
         except Exception as e:
             print(f"An unexpected error occurred with {sources}: {e}")
 
+
+"""
+To run this program need to actvivate the astropy environment
+conda activate astropy
+python3 2MASS_images.py
+"""
 if __name__ == "__main__":
     fits_files_folder='2MASS_files'
-    source_name='SR24'
-    # twomass_image_to_png(fits_files_folder,source_name)
-    mass_produce_2mass_images(folder=fits_files_folder)
+    source_name='T-Tauri'
+    twomass_image_to_png(fits_files_folder,source_name,pctl=99.0)
+    # mass_produce_2mass_images(folder=fits_files_folder,pctl=98.5)
 
     # sources_to_download_file='text_files/names_to_simbad_names.txt'
     # prepare_sources_to_download(source_name)

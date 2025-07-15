@@ -9,6 +9,13 @@ today = str(date.today())
 currentDateAndTime = datetime.now()
 hour_now = str(currentDateAndTime.hour)
 
+
+"""
+to use run
+conda activate /Users/christianflores/anaconda3/envs/astropy
+
+"""
+
 def are_names_approximate(name1, name2, threshold=0.8):
     """
     Compare two names and return True if they are approximately the same,
@@ -28,13 +35,15 @@ def are_names_approximate(name1, name2, threshold=0.8):
     # Return True if similarity exceeds the threshold
     return similarity >= threshold
 
-def calculate_concentration_factor(source_name, molecule, n_sigma=3):
+def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoord=True):
     '''
     Calculate concentration factors from molecular data as defined
     in van Kempen 2009 and Carney 2016
     :param source_name:
     :param molecule:
     :param n_sigma:
+    :param use_skycoord: True  For some sources obtained in SCAN mode, the coordinates  are wrong and we
+    placed the source at the center - for these please set to FALSE!
     :return:
     '''
     filename=source_name+'_'+molecule #'V347_Aur_HCO+'
@@ -49,12 +58,13 @@ def calculate_concentration_factor(source_name, molecule, n_sigma=3):
         aperture_radius = 7.635
 
     beam_size = np.pi/(4*np.log(2)) * (2 * aperture_radius)**2
-    peak_integrated_emission = peak_integrated_emission_from_map(source_name, molecule) ### This one requires object information.
-    area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=False)
+    peak_integrated_emission = peak_integrated_emission_from_map(source_name, molecule, use_skycoord=use_skycoord) ### This one requires object information.
+    area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=True)
     concentration = 1 - beam_size / area * integrated_emission / peak_integrated_emission
     rounded_concentration = round(concentration,3)
     print(f"For {source_name}, the concentration factor is {rounded_concentration}")
     return concentration
+
 
 def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
 
@@ -64,6 +74,8 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
             f"{new_values[0]:<20}"  # Source name in 20 bytes
             f"{new_values[1]:<20}"  # 
             f"{new_values[2]:<20}"  #
+            f"{new_values[3]:<20}"  #
+
         )
         # Read the file if it exists, otherwise start with a header
         try:
@@ -74,6 +86,7 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
             header = (
                 f"{'## SourceMame':<20}"
                 f"{'c-factor_1sigma':<20}"
+                f"{'c-factor_2sigma':<20}"
                 f"{'c-factor_3sigma':<20}\n"
             )
 
@@ -111,9 +124,10 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
                 continue  # Move to the next folder if the file doesn't exist
 
             concentration_1sigma = round(calculate_concentration_factor(sources, molecule, n_sigma=1),4)
+            concentration_2sigma = round(calculate_concentration_factor(sources, molecule, n_sigma=2),4)
             concentration_3sigma = round(calculate_concentration_factor(sources, molecule, n_sigma=3),4)
 
-            new_values = [sources, concentration_1sigma, concentration_3sigma]
+            new_values = [sources, concentration_1sigma,concentration_2sigma, concentration_3sigma]
 
             save_to_file(save_filename,new_values)
 
@@ -282,7 +296,7 @@ def plot_gravity_vs_spectral_index(filename, color_map='viridis', molecule='HCO+
         is_nan = [math.isnan(x) for x in HCO_data]
 
         molecular_data=HCO_data
-        min_val= -2
+        min_val= 0.2
     elif molecule=='C18O':
         # Check that all input arrays have the same length
         if len(logg_values) != len(ir_index_values) or len(logg_values) != len(C18O_data):
@@ -297,10 +311,21 @@ def plot_gravity_vs_spectral_index(filename, color_map='viridis', molecule='HCO+
     plt.figure(figsize=(8, 6))
 
     # Use c_factor as colors
-    scatter = plt.scatter(logg_values[is_numeric], ir_index_values[is_numeric], c=molecular_data[is_numeric],
-                          cmap=color_map, edgecolor='k', s=100,vmin=min_val)
+    # scatter = plt.scatter(logg_values[is_numeric], ir_index_values[is_numeric], c=molecular_data[is_numeric],
+    #                       cmap=color_map, edgecolor='k', s=100,vmin=min_val)
+
+    # Use c_factor as colors
+    # scatter = plt.scatter(logg_values[is_numeric]/1.e2, molecular_data[is_numeric], c=molecular_data[is_numeric],
+    #                       cmap=color_map, edgecolor='k', s=100,vmin=min_val)
+
+    # scatter = plt.scatter(logg_values[is_numeric], C18O_data[is_numeric], c=molecular_data[is_numeric],
+    #                       cmap=color_map, edgecolor='k', s=100,vmin=min_val)
+
+    scatter = plt.scatter(Temp_values[is_numeric], logg_values[is_numeric]/1.e2, c=molecular_data[is_numeric],
+                          cmap=color_map, edgecolor='k', s=130,vmin=min_val)
+
     # Add colorbar
-    cbar = plt.colorbar(scatter)
+    cbar = plt.colorbar(scatter,cmap='gist_rainbow')
 
     if molecule=='HCO+':
         cbar.set_label('HCO+ Concentration Factor', fontsize=12)
@@ -308,71 +333,168 @@ def plot_gravity_vs_spectral_index(filename, color_map='viridis', molecule='HCO+
         cbar.set_label('C18O Concentration Factor', fontsize=12)
 
     # Use black for non-numerical c_factor
-    plt.scatter(logg_values[is_nan], ir_index_values[is_nan], color='red', edgecolor='k', s=100)
+    # scatter = plt.scatter(Temp_values[is_nan], logg_values[is_nan]/1.e2, color='red', edgecolor='k', s=100,marker='s')
+    # plt.scatter(logg_values[is_nan], ir_index_values[is_nan], color='red', edgecolor='k', s=100)
+    # plt.scatter(logg_values[is_nan], HCO_data[is_nan], color='red', edgecolor='k', s=100)
 
     # Add labels and title
-    plt.xlabel('Gravity', fontsize=14)
-    plt.ylabel('Spectral Index', fontsize=14)
-    plt.title('Gravity vs Spectral Index', fontsize=16)
-    plt.grid(True, linestyle='--', alpha=0.6)
+    # plt.xlabel('Gravity', fontsize=14)
+    # plt.ylabel('Spectral Index', fontsize=14)
+    # plt.ylabel('C - HCO+', fontsize=14)
+    # plt.ylabel('C - C18O', fontsize=14)
+    # plt.ylim(-0.75,1.0)
 
-    # Show the plot
-    plt.tight_layout()
+    # plt.gca().invert_xaxis()
 
-    if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule+'_concentration_factor_3_parameters.png'), bbox_inches='tight', dpi=300)
-    plt.show()
+    plt.xlabel('Teff', fontsize=14)
+    plt.ylabel('logg', fontsize=14)
+    plt.xlim(4300,2900)
+    plt.ylim(4.0,2.7)
 
-
-def plot_parameters(filename,molecule,save=False):
-    Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
-    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
-
-    if molecule=='HCO+':
-        molecule_data = HCO_data
-    elif molecule=='C18O':
-        molecule_data =  C18O_data
-
-    plt.figure(figsize=(8, 6))
-
-    # plt.scatter(ir_index_values,molecule_data, edgecolor='k', s=100,c='C0')
-    # plt.xlabel('Spectral Index', fontsize=14)
-    # plt.ylabel('Concentration factor', fontsize=14)
-
-
-    plt.scatter(HCO_data,C18O_data, edgecolor='k', s=100,c='C1')
-    plt.xlabel('HCO+ concentration', fontsize=14)
-    plt.ylabel('C18O concentration', fontsize=14)
-
+    # plt.axhline(y=0.2,color='k',linestyle='--')
     # plt.title('Gravity vs Spectral Index', fontsize=16)
     plt.grid(True, linestyle='--', alpha=0.6)
 
-    one_to_one = np.linspace(0,1,10)
-    plt.plot(one_to_one,one_to_one,'k--',label='')
-    plt.ylim(-0.2,1)
-    plt.xlim(0,1)
-    #
+
+
+    # plt.ylim(-1.0,1.2)
     # Show the plot
     plt.tight_layout()
 
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule+'_comparing_both_concentrations.png'), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/concentration/', molecule+'_temp_vs_gravity'+today+'.png'), bbox_inches='tight', dpi=300)
     plt.show()
+
+def fit_polinomials(HCO_1, C18O_1):
+
+    HCO_1 = np.array(HCO_1)
+    C18O_1 = np.array(C18O_1)
+
+    # Mask to include only positive HCO+ values
+    mask_1 = (HCO_1 > 0) #& (C18O_1 > 0) #HCO_1 > 0
+
+    # Fit first-order polynomials (linear fits)
+    fit_1 = np.polyfit(HCO_1[mask_1], C18O_1[mask_1], 1)
+
+    print('the slope is ', fit_1[0])
+
+    # Generate x-values for plotting lines
+    x_vals = np.linspace(-0.5, 1.0, 100)
+    y_fit_1 = np.polyval(fit_1, x_vals)
+
+
+    x = HCO_1[mask_1]
+    y = C18O_1[mask_1]
+    coeffs = np.polyfit(x, y, 1)
+    y_pred = np.polyval(coeffs, x)
+
+    # Calculate R^2
+    ss_res = np.sum((y - y_pred) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    r_squared = 1 - (ss_res / ss_tot)
+
+    print(r_squared, coeffs)
+
+    return x_vals,y_fit_1
+
+def plot_parameters(save=False):
+    # Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
+    # vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
+    #
+    # if molecule=='HCO+':
+    #     molecule_data = HCO_data
+    # elif molecule=='C18O':
+    #     molecule_data =  C18O_data
+    #
+    # plt.figure(figsize=(8, 6))
+    #
+    # # plt.scatter(ir_index_values,molecule_data, edgecolor='k', s=100,c='C0')
+    # # plt.xlabel('Spectral Index', fontsize=14)
+    # # plt.ylabel('Concentration factor', fontsize=14)
+    #
+    #
+    # plt.scatter(HCO_data,C18O_data, edgecolor='k', s=100,c='C1')
+    # plt.xlabel('HCO+ concentration', fontsize=14)
+    # plt.ylabel('C18O concentration', fontsize=14)
+    #
+    # # plt.title('Gravity vs Spectral Index', fontsize=16)
+    # plt.grid(True, linestyle='--', alpha=0.6)
+    #
+    # one_to_one = np.linspace(0,1,10)
+    # plt.plot(one_to_one,one_to_one,'k--',label='')
+    # plt.ylim(-0.2,1)
+    # plt.xlim(0,1)
+    # #
+    # # Show the plot
+    # plt.tight_layout()
+
+    # Define the data from the LaTeX table
+    HCO_1sigma = [0.306, 0.1869, 0.6736, 0.3170, 0.4456, 0.8003, 0.1554, 0.7607, 0.4236, 0.4451, 0.1693, 0.6633,
+                  0.7373, 0.4367, 0.4544, 0.4273, 0.9506, 0.6309, -0.5635, -1.7506]
+    HCO_2sigma = [-0.00, -0.0807, 0.6611, 0.3078, 0.4397, 0.7773, 0.0877, 0.7412, 0.3349, 0.2210, 0.0819, 0.5586,
+                  0.6998, 0.2461, 0.4544, 0.2086, 0.9376, 0.5687, -0.5898, -1.9718]
+    HCO_3sigma = [np.nan, -0.3475, 0.6427, 0.3034, 0.4352, 0.7457, -0.0781, 0.7281, 0.2279, 0.1009, -0.0570, 0.3600,
+                  0.6447, -0.0090, 0.4540, -0.0120, 0.9240, 0.4420, -0.6380, -2.2140]
+
+    C18O_1sigma = [0.4871, 0.1642, 0.6130, 0.3260, 0.4933, 0.6358, 0.3307, 0.2969, 0.4446, 0.5044, 0.2839, 0.6789,
+                   0.5641, -0.0707, 0.3645, 0.6057, 0.8673, 0.5360, 0.1770, 0.0907]
+    C18O_2sigma = [0.3944, 0.1131, 0.6010, 0.3260, 0.4933, 0.6319, 0.3015, 0.2900, 0.3688, 0.4364, 0.2564, 0.6455,
+                   0.5255, -0.4915, 0.3645, 0.5744, 0.8489, 0.3839, 0.1770, 0.0907]
+    C18O_3sigma = [0.256, 0.0231, 0.5860, 0.3260, 0.4933, 0.6184, 0.2852, 0.2622, 0.2663, 0.3309, 0.1968, 0.6045,
+                   0.4784, -0.8937, 0.3643, 0.5121, 0.8217, 0.1481, 0.1760, 0.0907]
+
+
+    # Create the scatter plots
+    plt.figure(figsize=(8, 7))
+    fig1 = plt.subplot()
+    fig1.scatter(HCO_1sigma, C18O_1sigma, color='#e6550d', label=r'1$\sigma$', s=200, edgecolor='k')
+    fig1.scatter(HCO_2sigma, C18O_2sigma, color='#fd8d3c', label=r'2$\sigma$',s=200,marker='p',ec='k')
+    fig1.scatter(HCO_3sigma, C18O_3sigma, color='#feedde', label=r'3$\sigma$',s=200,marker='d',ec='k')
+
+    fig1.set_xlabel('HCO$^+$ Concentration Factor', fontsize=14)
+    fig1.set_ylabel('C$^{18}$O Concentration Factor', fontsize=14)
+    # plt.title('Comparison of HCO$^+$ vs. C$^{18}$O Concentration Factors')
+    plt.axhline(0, color='gray', linestyle='--', linewidth=0.5)
+    plt.axvline(0, color='gray', linestyle='--', linewidth=0.5)
+    plt.legend()
+    # fig1.set_ylim(-0.54,1)
+    # fig1.set_xlim(-0.0,1)
+    plt.tight_layout()
+    plt.tick_params(axis='both', labelsize=14)
+
+    one_to_one = np.linspace(-1.,1,10)
+    fig1.plot(one_to_one,one_to_one,color='gray',linestyle=(0, (5, 10)))
+
+    ### Simple polynomial fit
+    # x_vals, y_fit = fit_polinomials(HCO_1sigma, C18O_1sigma)
+    # fig1.plot(x_vals, y_fit, color='#e6550d', linestyle='--', label=r'1$\sigma$ fit')
+
+    fig1.set_axisbelow(True)
+    fig1.grid(True,zorder=3)
+
+    if save:
+        plt.savefig(os.path.join('Figures/concentration/', molecule+'_comparing_both_concentrations'+today+'.png'), bbox_inches='tight', dpi=300)
+    plt.show()
+
 
 def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity', molecule='HCO+',save=False):
 
-    T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
+    T_mb, S_peak, S_area, star_name_map = read_map_parameters(map_file)
 
 
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
     vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
     logg_values =logg_values/100.
 
+    print(logg_uncertainty[0])
+    print(logg_uncertainty[1])
     ir_index, ir_corrected_values, star_name_ir_index = read_ir_index_parameters(ir_file)
 
     protostars_parameter =[]
     not_protostar_parameter=[]
     counted_source = []
+    protostars_parameter_uncertainty =[]
+    not_protostars_parameter_uncertainty =[]
 
     if parameter.lower() == 'gravity':
         for ii in range(len(star_name)):
@@ -381,17 +503,25 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
                 if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
                     # print(ii)
                     counted_source.append(ii)
-                    if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3:
+                    if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3 and C18O_data[ii]>0.2:
 
                         protostars_parameter.append(logg_values[ii])
-                        print('Detections',star_name[ii])
+                        # print(logg_uncertainty[ii])
+                        average_uncertainty = (logg_uncertainty[0][ii] + logg_uncertainty[1][ii])/2
+                        protostars_parameter_uncertainty.append(average_uncertainty)
+                        # print('Detections',star_name[ii])
 
                     else:
                         not_protostar_parameter.append(logg_values[ii])
-                        print('NO detections',star_name[ii])
+                        average_uncertainty = (logg_uncertainty[0][ii] + logg_uncertainty[1][ii])/2
+                        not_protostars_parameter_uncertainty.append(average_uncertainty)
+
+                        # print('NO detections',star_name[ii])
 
             if ii not in counted_source:
                 not_protostar_parameter.append(logg_values[ii])
+                average_uncertainty = (logg_uncertainty[0][ii] + logg_uncertainty[1][ii]) / 2
+                not_protostars_parameter_uncertainty.append(average_uncertainty)
 
     elif parameter.lower() == 'ir_index':
 
@@ -401,17 +531,17 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
                 for zz in range(len(star_name_ir_index)):
                     if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9) & are_names_approximate(star_name[ii], star_name_ir_index[zz], threshold=0.9):
 
-                        if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3:
+                        if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3  and C18O_data[ii]>0.2:
 
                             protostars_parameter.append(ir_corrected_values[zz])
                             # protostars_parameter.append(ir_index[jj])
 
-                            print('Detections',star_name[ii])
+                            # print('Detections',star_name[ii])
 
                         else:
                             not_protostar_parameter.append(ir_corrected_values[zz])
                             # not_protostar_parameter.append(ir_index[jj])
-                            print('NOOOOO detections',star_name[ii])
+                            # print('NOOOOO detections',star_name[ii])
 
 
     res= stats.ttest_ind(protostars_parameter, not_protostar_parameter, equal_var=False)
@@ -428,8 +558,21 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
     # plt.title(molecule)
     if parameter.lower() == 'gravity':
         x_label ='log(g)'
-        bins = np.arange(2.7, 4.2, 0.2)
+        bins = np.arange(2.7, 4.1, 0.2)
         x_leg, y_leg = 2.75, 6.5
+
+        print('mean gravity envelope', mean_val_1)
+        print('std error mean gravity envelope', std_val_1/(len(protostars_parameter))**0.5)
+
+        print('mean gravity non-envelope', mean_val_2)
+        print('std error mean gravity non-envelope', std_val_2/(len(not_protostar_parameter))**0.5)
+
+        print('mean, median, and std uncertainty of the gravities',
+              np.nanmean(logg_uncertainty),np.nanmedian(logg_uncertainty),np.nanstd(np.nanmean(logg_uncertainty)))
+
+        print('mean, median of envelope', np.nanmean(protostars_parameter_uncertainty), np.nanmedian(protostars_parameter_uncertainty))
+        print('mean, median of non-envelope', np.nanmean(not_protostars_parameter_uncertainty), np.nanmedian(not_protostars_parameter_uncertainty))
+
         # plt.legend(loc='upper left')
 
     elif parameter.lower() == 'ir_index':
@@ -453,7 +596,7 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
 
     plt.legend()
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule + 'IR_histogram_C02_and_emission_abov0p35_'+ today +'.png'),
+        plt.savefig(os.path.join('Figures/concentration/', molecule + 'HCO+_Hist_'+ today +'.png'),
                     bbox_inches='tight', dpi=300)
     plt.show()
 
@@ -498,7 +641,16 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
         bins = np.arange(-1.0,1.5,0.25)
         x_label ='Spectral index'
         x_leg,y_leg = 0.4, 5
-
+    elif parameter.lower() == 'hco':
+        my_parameter = HCO_data
+        bins = np.arange(-1.9,1.0,0.1)
+        x_label ='HCO+ concentration'
+        x_leg,y_leg = 0.4, 5
+    elif parameter.lower() == 'c18o':
+        my_parameter = C18O_data
+        bins = np.arange(-1.0,1.0,0.1)
+        x_label ='C18O concentration'
+        x_leg,y_leg = 0.4, 5
     else:
         print('wrong parameter')
 
@@ -511,13 +663,15 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
     mean_val_2 = round(np.nanmean(my_parameter[is_nan]),3)
     std_val_2 = round(np.nanstd(my_parameter[is_nan]),3)
 
-    plt.text(x=x_leg,y=y_leg,s=r'$\mu$ = '+str(mean_val_1) +r' $\sigma$ = '+str(std_val_1),size=12,color='C0',weight=600)
-    plt.text(x=x_leg,y=y_leg-1,s=r'$\mu$ = '+str(mean_val_2) +r' $\sigma$ = '+str(std_val_2),size=12,color='C1',weight=600)
+    # plt.text(x=x_leg,y=y_leg,s=r'$\mu$ = '+str(mean_val_1) +r' $\sigma$ = '+str(std_val_1),size=12,color='C0',weight=600)
+    # plt.text(x=x_leg,y=y_leg-1,s=r'$\mu$ = '+str(mean_val_2) +r' $\sigma$ = '+str(std_val_2),size=12,color='C1',weight=600)
 
-    plt.hist(my_parameter[is_numeric],bins,alpha=0.7, label='detections', edgecolor="black")
-    plt.hist(my_parameter[is_nan],bins,alpha=0.7, label='non-detections', edgecolor="black")
+    # plt.hist(my_parameter[is_numeric],bins,alpha=0.7, label='detections', edgecolor="black" , color='C0')
+    # plt.hist(my_parameter[is_nan],bins,alpha=0.7, label='non-detections', edgecolor="black", color='C0')
+    plt.hist(my_parameter,bins,alpha=0.7, label='non-detections', edgecolor="black", color='C0')
+
     plt.xlabel(x_label,size=14)
-    plt.legend(loc='upper left')
+    # plt.legend(loc='upper left')
     plt.title(molecule)
     if save:
         plt.savefig(os.path.join('Figures/concentration/', molecule + '_histogram_C04'+parameter+'.png'),
@@ -526,30 +680,31 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'IRAS05379-0758'
+    source_name = 'DG-Tau'
     molecule ='HCO+'
     # molecule ='C18O'
 
-    # calculate_concentration_factor(source_name, molecule, n_sigma=1)
+    # calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoord=False)
 
     # save_concentration_factors_to_file(folder_fits='sdf_and_fits',
     #                                    molecule=molecule,
     #                                    save_filename='concentrations_'+ today + '_' + hour_now + '_' + molecule+'.txt')
 
-    # plot_parameters(filename='text_files/Class_I_for-JCMT-plots.txt',molecule=molecule,save=True)
 
-    # plot_gravity_vs_spectral_index(filename='text_files/Class_I_for-JCMT-plots.txt', color_map='viridis',
+    # plot_parameters(save=True)
+
+    plot_gravity_vs_spectral_index(filename='text_files/Class_I_for-JCMT-plots.txt', color_map='gist_rainbow',
+                                   molecule=molecule,save=True)
+
+    # make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='hco',
     #                                molecule=molecule,save=True)
-
-    # make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='ir_index',
-    #                                molecule=molecule,save=False)
 
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
     #                                molecule=molecule,save=False)
 
-    make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
-                                 , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
-                                 parameter='gravity',molecule='HCO+', save=False)
+    # make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
+    #                              , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
+    #                              parameter='gravity',molecule='HCO+', save=False)
 
     # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
     #                                 map_file='spectrum_parameters_'+molecule+'.txt',molecule=molecule,save=True)

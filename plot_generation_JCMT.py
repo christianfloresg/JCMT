@@ -240,7 +240,7 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True,nosk
                                                             source_name=source_name+'_FOV',molecule=molecule)
     # rounded_vel_pos, rounded_FHWM, rounded_sigma = round(pos,3), round(abs(FHWM),3), round(abs(sigma),3)
 
-    # pos_fov=23.0
+    pos_fov=6.0
     vmin_fov = pos_fov - 15*abs(sigma_fov)
     vmax_fov = pos_fov + 15*abs(sigma_fov)
 
@@ -405,6 +405,7 @@ def get_icrs_coordinates(object_name):
     # Return the ICRS coordinates in degrees
     return coord
 
+
 def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=False,plot=True):
     '''
     Plot the moment eight map of a source and molecule
@@ -504,6 +505,7 @@ def offset_coordinates(ax,skycoord_object):
     ra.set_ticks_visible(False)
     dec.set_ticks_visible(False)
 
+
     lon = overlay['lon']
     # lon.set_coord_type('longitude', 180)
     lon.set_format_unit(u.arcsec)
@@ -520,11 +522,17 @@ def offset_coordinates(ax,skycoord_object):
     lat.set_ticklabel_position('l')
     lat.set_axislabel_position('l')
 
+    lon.set_axislabel(None)
+    lat.set_axislabel(None)
+    lon.set_auto_axislabel(False)
+    lat.set_auto_axislabel(False)
+
     # lon.set_axislabel(r'$\Delta$RA',size=12)
     # lat.set_axislabel(r'$\Delta$DEC',size=12)
 
-    lat.set_axislabel(text=' ')
-    lon.set_axislabel(text=' ')
+    # lat.set_axislabel(text=' ')
+    # lon.set_axislabel(text=' ')
+
 
 
 def create_moment_eight_map(source_name,molecule):
@@ -572,11 +580,13 @@ def create_moment_eight_map(source_name,molecule):
     return moment_eight
 
 
-def peak_integrated_emission_from_map(source_name, molecule):
+def peak_integrated_emission_from_map(source_name, molecule, use_skycoord=True):
     '''
     Find the peak integrated emission within the moment zero map.
     :param source_name:
     :param molecule:
+    :param use_skycoord: True  For some sources obtained in SCAN mode, the coordinates  are wrong and we
+    placed the source at the center - for these please set to FALSE!
     :return:
     '''
 
@@ -607,11 +617,12 @@ def peak_integrated_emission_from_map(source_name, molecule):
     x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
 
 
-    #### Only use this if there is a problem with WCS and you need to calculate the spectrum at the center.
-    # ra_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[0]
-    # dec_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[1]
-    # skycoord_object = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
-    # x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
+    if use_skycoord==False:
+        #### Only use this if there is a problem with WCS and you need to calculate the spectrum at the center.
+        ra_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[0]
+        dec_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[1]
+        skycoord_object = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
+        x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
 
 
     print ('HERE!!!!')
@@ -643,7 +654,7 @@ def peak_integrated_emission_from_map(source_name, molecule):
 
     return peak_integrated_emission
 
-def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot=True):
+def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot=True,only_whole_area=False):
     '''
     Computes the area of a map of all the emission
     above a given sigma noise level.
@@ -668,6 +679,7 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
 
 
     image_mom_0 = create_moment_zero_map(source_name, molecule)
+    image_mom_0 = image_mom_0[3:-3,3:-3]
 
     try:
         ### I first try to get the velocity centroid from the data saved in text file.
@@ -697,9 +709,14 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
     pixel_area_arcsec2 = data_cube.cdelt_ra*data_cube.cdelt_dec
     area_of_significant_emission = abs(pixel_area_arcsec2*n_pixels_interest)
     print('Total area of  array: ', abs(pixel_area_arcsec2*data_cube.ny*data_cube.nx),' in squared arcsec')
+    if only_whole_area:
+        return abs(pixel_area_arcsec2*data_cube.ny*data_cube.nx)
     print('Area of significant values: ', area_of_significant_emission,' in squared arcsec')
 
-    pix_per_beam = (2*aperture_radius)**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size/pix_area
+    '''
+    The factor of two is because  we give the radius or half of the FWHM, which is about 15'' in diameter.
+    '''
+    pix_per_beam = (2*aperture_radius)**2*np.pi / (4*np.log(2)*data_cube.cdelt_ra**2) # pix-per-beam = beam_size_area/pix_area
 
     print('Pixels per beam: ', pix_per_beam)
 
@@ -783,7 +800,6 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         raise Exception("Sorry, I need to calculate such aperture radius")
 
 
-
     # Apply a threshold to mask large values
     if percentile_outlier:
         threshold = np.nanpercentile(image_mom_0.reshape(-1), percentile_outlier)
@@ -816,6 +832,10 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     levels = moment_zero_noise_array
 
     ## Moment zero
+    ## Moment zero
+
+    # plt.figure(figsize=(6, 7))
+    # fig1 = plt.subplot(projection=wcs)
     fig1 = plt.subplot(projection=moment_0.wcs)
     mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower')#,vmax=0.5)
     # divider = make_axes_locatable(fig1)
@@ -845,6 +865,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         IR_position = fig1.scatter(x=ra_center,y=dec_center, s=150, c='gray', transform=fig1.get_transform('icrs'), marker='x',
                                 clip_on=False,linewidths=3.0)
 
+        ### FOr DG Tau
         # ra_offset = 20/3600
         # dec_offset = 80/3600
 
@@ -1020,20 +1041,57 @@ def mass_calculate_spectral_properties(folder_fits, molecule):
         except Exception as e:
             print(f"An unexpected error occurred with {sources}: {e}")
 
+def mass_measurement_from_molecular_lines(source_name, molecule,distance_pc):
+    # New input values
+    # T_mb_dv_ = 0.7  # Integrated intensity in K km/s
+    # beam_area_arcsec2 = 6500  # Extended source area in arcsec^2
+
+    beam_area_arcsec2, T_mb_dv = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=1, plot=False)
+    beam_area_arcsec2=177 # this is  a 15'' aperture
+
+    print('Integrated intensity in K km/s', T_mb_dv)
+    print('Extended source area in arcsec^2', beam_area_arcsec2)
+
+    X_C18O = 1.7e-7
+    mass_msun_new = (4.81e-13 *
+                     (distance_pc / 140) ** 2 *
+                     (1 / X_C18O) *
+                     T_mb_dv *
+                     beam_area_arcsec2)
+
+    print('envelope mass above 1 sigma', mass_msun_new)
+
+    beam_area_arcsec2, T_mb_dv = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=3, plot=True)
+    beam_area_arcsec2=177 # this is  a 15'' aperture
+
+    print('Integrated intensity in K km/s', T_mb_dv)
+    print('Extended source area in arcsec^2', beam_area_arcsec2)
+
+    X_C18O = 1.7e-7
+    mass_msun_new = (4.81e-13 *
+                     (distance_pc / 140) ** 2 *
+                     (1 / X_C18O) *
+                     T_mb_dv *
+                     beam_area_arcsec2)
+
+    print('envelope mass above 3 sigma', mass_msun_new)
+
+    return mass_msun_new
 
 
 if __name__ == "__main__":
 
-    source_name = 'DoAr43'
-    # source_name = 'DG-Tau'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    # source_name = 'IRS5'
+    source_name = 'DG-Tau'
+    molecule ='HCO+'
+    # molecule ='C18O'
+    # distance = 130
     ## Step 0
-    retrieve_and_write_spectral_properties(source_name, molecule, noskycoord=False)
+    # retrieve_and_write_spectral_properties(source_name, molecule, noskycoord=False)
 
     ### Step 1 creates a plot of the spectrum
-    # plot_spectrum(source_name, molecule,type='central',save=True)
-    # plot_spectrum(source_name, molecule,type='fov',save=True)
+    plot_spectrum(source_name, molecule,type='central',save=True)
+    # plot_spectrum(source_name, molecule,type='fov',save=False)
 
     ### Step 3
     ### Plot the maps
@@ -1047,3 +1105,4 @@ if __name__ == "__main__":
     # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
     # peak_integrated_emission_from_map(source_name, molecule)
+    # mass_measurement_from_molecular_lines(source_name, molecule,distance_pc=distance)
