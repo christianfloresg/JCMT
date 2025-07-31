@@ -50,7 +50,7 @@ def plot_images_grid3(image_dir, num_columns=3, max_sources=None, ini_num=0, out
         folder_labels.append(subfolder)
 
     num_rows = len(folder_labels)
-    fig, axes = plt.subplots(num_rows, num_columns, figsize=(num_columns * 3, num_rows * 3.2), gridspec_kw={'width_ratios': [0.8, 1, 1]})
+    fig, axes = plt.subplots(num_rows, num_columns, figsize=(num_columns * 2.5, num_rows * 3.2), gridspec_kw={'width_ratios': [0.8, 1, 1]})
     axes = axes.flatten()
 
     for i, ax in enumerate(axes):
@@ -61,10 +61,11 @@ def plot_images_grid3(image_dir, num_columns=3, max_sources=None, ini_num=0, out
             ax.imshow(np.asarray(img))
             ax.set_aspect('equal')
 
-    for idx, label in enumerate(folder_labels):
-        fig.text(0.11, 0.95 - 0.775*(idx + 1.0) / num_rows, label, va='center', ha='right', rotation=90, fontsize=10)
+    # for idx, label in enumerate(folder_labels):
+        # fig.text(0.11, 0.95 - 0.775*(idx + 1.0) / num_rows, label, va='center', ha='right', rotation=90, fontsize=10)
+        # fig.text(0.2, 0.95 - 0.775*(idx + 1.0) / num_rows, label, va='center', ha='right', rotation=0, fontsize=10)
 
-    fig.subplots_adjust(wspace=0.01, hspace=0.01)
+    fig.subplots_adjust(wspace=0.00, hspace=0.00)
 
     if output_file:
         now = datetime.now().strftime("%Y%m%d_%H%M")

@@ -679,7 +679,7 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
 
 
     image_mom_0 = create_moment_zero_map(source_name, molecule)
-    image_mom_0 = image_mom_0[3:-3,3:-3]
+    # image_mom_0 = image_mom_0[20:-17,20:-17]
 
     try:
         ### I first try to get the velocity centroid from the data saved in text file.
@@ -700,6 +700,13 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
 
 
     threshold = n_sigma * moment_zero_noise  # Adjust threshold factor if needed
+    print('n sigma threshold ',threshold)
+    threshold = 0.13  # Adjusted for Perseus & V347 Aur
+    # threshold = 0.065  # Adjusted for Orion
+    # threshold = 0.3  # Adjust threshold factor if needed
+
+    print('new threshold ',threshold)
+
     image_mom_0[image_mom_0 < threshold] = np.nan
 
     n_pixels_interest = np.count_nonzero(~np.isnan(image_mom_0))
@@ -820,6 +827,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         float_sigma_vel = float(sigma_vel)
 
         moment_zero_noise = (0.2*6*float_sigma_vel)**0.5*float_noise_level ## 0.2 is the binning in km/s
+
 
         moment_zero_noise_array = moment_zero_noise* np.array([1, 3, 5,10,20,50,80,100,150])
         # print(noise_level)

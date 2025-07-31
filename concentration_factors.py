@@ -183,6 +183,30 @@ def read_parameters(filename):
     return Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
            vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name
 
+def read_envelope_mass_parameters(filename):
+
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()  # Remove leading/trailing whitespace
+            if not line.startswith('#'):
+                num_columns = len(line.split())
+                continue
+
+        # header = f.readline()#.strip()  # Read the first line
+        # num_columns = len(header.split())  # Count the number of columns based on delimiter
+    print('number of cols', num_columns)
+    dtype = [('col1', 'U20')] + [(f'col{i+2}', 'f8') for i in range(num_columns - 1)]
+
+
+    our_data = np.genfromtxt(filename, dtype=dtype,
+                     delimiter=None, encoding='utf-8', comments='#')
+
+    star_name = our_data['col1']#our_data[:, 0]
+    H2_coldense_fov = our_data['col4']#our_data[:, 4]
+    H2_coldense_central = our_data['col9']#our_data[:, 9]
+
+    return star_name, H2_coldense_fov, H2_coldense_central
+
 
 def read_map_parameters(filename):
 
@@ -235,6 +259,31 @@ def read_ir_index_parameters(filename):
 
     return ir_index, corrected_ir_index, star_name
 
+def read_c_factor_parameters(filename):
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()  # Remove leading/trailing whitespace
+            if not line.startswith('#'):
+                num_columns = len(line.split())
+                continue
+
+        # header = f.readline()#.strip()  # Read the first line
+        # num_columns = len(header.split())  # Count the number of columns based on delimiter
+    print('number of cols', num_columns)
+    dtype = [('col1', 'U20')] + [(f'col{i+2}', 'f8') for i in range(num_columns - 1)]
+
+
+    our_data = np.genfromtxt(filename, dtype=dtype,
+                     delimiter=None, encoding='utf-8', comments='#')
+
+    star_name = our_data['col1']#our_data[:, 0]
+    c_factor_1_sigma = our_data['col2']#our_data[:, 4]
+    c_factor_2_sigma = our_data['col3']#our_data[:, 9]
+    c_factor_3_sigma = our_data['col4']#our_data[:, 9]
+
+    return star_name, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma
+
+
 def plot_spectral_vs_map_parameters(spectrum_file,map_file,molecule='HCO+',save=False):
     '''
     Plot parameters related to the star against parameters related to the maps
@@ -258,6 +307,7 @@ def plot_spectral_vs_map_parameters(spectrum_file,map_file,molecule='HCO+',save=
                 plt.scatter(logg_values[ii]/100., S_area[jj], color='orange', edgecolor='k', s=100)
                 # plt.scatter(logg_values[ii]/100., T_mb[jj], color='blue', edgecolor='k', s=100)
 
+
     # Add labels and title
     plt.xlabel('Gravity', fontsize=14)
     # plt.ylabel('Integrated Intensity Main Beam (K km/s)', fontsize=14)
@@ -274,96 +324,169 @@ def plot_spectral_vs_map_parameters(spectrum_file,map_file,molecule='HCO+',save=
     plt.show()
 
 
-def plot_gravity_vs_spectral_index(filename, color_map='viridis', molecule='HCO+',save=False):
-    """
-    Plots gravity vs. spectral index with c_factor as the color of the data points.
-
-    Args:
-        gravity (array-like): Array of gravity values for the x-axis.
-        spectral_index (array-like): Array of spectral index values for the y-axis.
-        c_factor (array-like): Array of c_factor values for coloring the points.
-        color_map (str): Colormap to use for the points (default: 'viridis').
-    """
-
+def plot_stellar_params_and_coldense(spectrum_file,map_file,molecule='HCO+',save=False, color_map='gist_rainbow'):
+    '''
+    Plot parameters related to the star against parameters related to the maps
+    :param spectrum_file:
+    :param map_file:
+    :param molecule:
+    :param save:
+    :return:
+    '''
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
-    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
+    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(spectrum_file)
 
-    if molecule=='HCO+':
-        # Check that all input arrays have the same length
-        if len(logg_values) != len(ir_index_values) or len(logg_values) != len(HCO_data):
-            raise ValueError("All input arrays must have the same length.")
-        is_numeric = [not math.isnan(x) for x in HCO_data]
-        is_nan = [math.isnan(x) for x in HCO_data]
+    star_name_map, H2_coldense_fov, H2_coldense_central = read_envelope_mass_parameters(map_file)
 
-        molecular_data=HCO_data
-        min_val= 0.2
-    elif molecule=='C18O':
-        # Check that all input arrays have the same length
-        if len(logg_values) != len(ir_index_values) or len(logg_values) != len(C18O_data):
-            raise ValueError("All input arrays must have the same length.")
+    save_temp,save_logg,save_H2_coldense_central=[],[],[]
 
-        is_numeric = [not math.isnan(x) for x in C18O_data]
-        is_nan = [math.isnan(x) for x in C18O_data]
-        molecular_data=C18O_data
-        min_val= -1
+    for ii in range(len(star_name)):
+        for jj in range(len(star_name_map)):
+            if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
+                print(star_name[ii], star_name_map[jj],H2_coldense_central[jj])
+                # plt.scatter(logg_values[ii]/100., S_peak[jj], color='red', edgecolor='k', s=100)
+                # plt.scatter(logg_values[ii]/100., S_area[jj], color='orange', edgecolor='k', s=100)
+                # plt.scatter(logg_values[ii]/100., T_mb[jj], color='blue', edgecolor='k', s=100)
+                save_temp.append(Temp_values[ii])
+                save_logg.append(logg_values[ii])
+                save_H2_coldense_central.append(H2_coldense_central[jj])
 
-    # Create the scatter plot
-    plt.figure(figsize=(8, 6))
+    # scatter = plt.scatter(save_temp, save_logg, c=np.log10(np.asarray(save_H2_coldense_central)),
+    #                       cmap=color_map, edgecolor='k', s=130,vmin=21)
 
-    # Use c_factor as colors
-    # scatter = plt.scatter(logg_values[is_numeric], ir_index_values[is_numeric], c=molecular_data[is_numeric],
-    #                       cmap=color_map, edgecolor='k', s=100,vmin=min_val)
-
-    # Use c_factor as colors
-    # scatter = plt.scatter(logg_values[is_numeric]/1.e2, molecular_data[is_numeric], c=molecular_data[is_numeric],
-    #                       cmap=color_map, edgecolor='k', s=100,vmin=min_val)
-
-    # scatter = plt.scatter(logg_values[is_numeric], C18O_data[is_numeric], c=molecular_data[is_numeric],
-    #                       cmap=color_map, edgecolor='k', s=100,vmin=min_val)
-
-    scatter = plt.scatter(Temp_values[is_numeric], logg_values[is_numeric]/1.e2, c=molecular_data[is_numeric],
-                          cmap=color_map, edgecolor='k', s=130,vmin=min_val)
-
-    # Add colorbar
-    cbar = plt.colorbar(scatter,cmap='gist_rainbow')
-
-    if molecule=='HCO+':
-        cbar.set_label('HCO+ Concentration Factor', fontsize=12)
-    elif molecule=='C18O':
-        cbar.set_label('C18O Concentration Factor', fontsize=12)
-
-    # Use black for non-numerical c_factor
-    # scatter = plt.scatter(Temp_values[is_nan], logg_values[is_nan]/1.e2, color='red', edgecolor='k', s=100,marker='s')
-    # plt.scatter(logg_values[is_nan], ir_index_values[is_nan], color='red', edgecolor='k', s=100)
-    # plt.scatter(logg_values[is_nan], HCO_data[is_nan], color='red', edgecolor='k', s=100)
-
+    scatter = plt.scatter(save_temp, save_logg, c=np.log10(np.asarray(save_H2_coldense_central)),
+                          cmap=color_map, edgecolor='k', s=130,vmin=20.5)
     # Add labels and title
-    # plt.xlabel('Gravity', fontsize=14)
-    # plt.ylabel('Spectral Index', fontsize=14)
-    # plt.ylabel('C - HCO+', fontsize=14)
-    # plt.ylabel('C - C18O', fontsize=14)
-    # plt.ylim(-0.75,1.0)
-
-    # plt.gca().invert_xaxis()
-
-    plt.xlabel('Teff', fontsize=14)
+    plt.xlabel('Temperature (K)', fontsize=14)
     plt.ylabel('logg', fontsize=14)
+    cbar = plt.colorbar(scatter,cmap='gist_rainbow')
     plt.xlim(4300,2900)
-    plt.ylim(4.0,2.7)
+    plt.ylim(400,270)
 
-    # plt.axhline(y=0.2,color='k',linestyle='--')
-    # plt.title('Gravity vs Spectral Index', fontsize=16)
+    # plt.title(molecule, fontsize=16)
     plt.grid(True, linestyle='--', alpha=0.6)
 
-
-
-    # plt.ylim(-1.0,1.2)
     # Show the plot
     plt.tight_layout()
-
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule+'_temp_vs_gravity'+today+'.png'), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/stellar_vs_gas/', molecule+'_gravity_vs_integrated_intensity_FOV.png'), bbox_inches='tight', dpi=300)
     plt.show()
+
+
+def plot_stellar_params_and_c_factors(spectrum_file,c_factor_file,sigma_threshold='2',molecule='HCO+',save=False, color_map='gist_rainbow'):
+    '''
+    Plot parameters related to the star against parameters related to the maps
+    :param spectrum_file:
+    :param map_file:
+    :param molecule:
+    :param save:
+    :return:
+    '''
+    Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
+    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(spectrum_file)
+
+    star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters(c_factor_file)
+
+    if sigma_threshold ==1:
+        c_factor_n_sigma = c_factor_1_sigma
+    elif sigma_threshold==2:
+        c_factor_n_sigma = c_factor_2_sigma
+    elif sigma_threshold==3:
+        c_factor_n_sigma = c_factor_3_sigma
+    else:
+        raise ValueError("Number must be 1, 2, or 3 sigmas.")
+
+    save_temp, save_logg, save_IR_index, save_this_c_factor=[],[],[],[]
+
+    for ii in range(len(star_name)):
+        c_factor_aux=0.0
+        for jj in range(len(star_name_map)):
+            if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
+                print(star_name[ii], star_name_map[jj], c_factor_n_sigma[jj])
+                if math.isnan(c_factor_n_sigma[jj]) or c_factor_n_sigma[jj] == float('-inf'):
+                    c_factor_aux = 0.0
+                else:
+                    c_factor_aux = c_factor_n_sigma[jj]
+
+                print(c_factor_aux,type(c_factor_aux))
+                continue
+
+        save_temp = np.append(save_temp, Temp_values[ii])
+        save_logg = np.append(save_logg, logg_values[ii])
+        save_this_c_factor = np.append(save_this_c_factor, c_factor_aux)
+        save_IR_index = np.append(save_IR_index,ir_index_values[ii])
+
+    # Separate the points lower than X
+    save_temp = np.array(save_temp)
+    save_logg = np.array(save_logg)
+    save_IR_index = np.array(save_IR_index)
+    save_this_c_factor = np.array(save_this_c_factor)
+
+    mask_low = save_this_c_factor < -0.2
+    mask_good = ~mask_low
+
+    # # Scatter for 'good' c_factors
+    # scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
+    #                       c=save_this_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
+
+    scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
+                          c=save_this_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
+
+    # # Scatter for 'low' c_factors as down arrows at c_factor=-0.3
+    # Use marker='v' for down arrow. We'll plot at y=-0.3, but color by the *real* c_factor value
+    plt.scatter(save_logg[mask_low]/1.e2, np.full_like(save_logg[mask_low], -0.2),
+                c='red', edgecolor='k', s=100, marker='v')
+
+
+    # Scatter for 'good' c_factors
+    # scatter = plt.scatter(save_temp,save_logg/1.e2,
+    #                       c=save_this_c_factor, cmap=color_map, edgecolor='k', s=100, vmin=0.1,vmax=0.8)
+    # print(save_IR_index,)
+
+
+    # Add labels and title
+
+    # plt.xlabel('Temperature (K)', fontsize=14)
+    # plt.ylabel('logg', fontsize=14)
+    # cbar = plt.colorbar(scatter,cmap='gist_rainbow')
+    # plt.xlim(4300,2900)
+    # plt.ylim(4.00,2.70)
+
+    # Add labels and title
+    # plt.ylabel('HCO+', fontsize=14)
+    plt.xlabel('logg', fontsize=14)
+    # cbar = plt.colorbar(scatter,cmap='gist_rainbow')
+    # plt.ylim(-0.3,1.0)
+
+    # Add labels and title
+    plt.ylabel('C18O', fontsize=14)
+    # plt.ylabel('HCO+', fontsize=14)
+
+    # plt.xlabel('Corrected alpha index', fontsize=14)
+    plt.ylim(-0.3,1.0)
+
+    # plt.title(str(sigma_threshold)+' sigma threshold')
+    # scatter = plt.scatter(save_IR_index,save_this_c_factor,
+    #                       c=save_this_c_factor, cmap=color_map, edgecolor='k', s=100, vmin=0.1,vmax=0.8)
+
+    # plt.scatter(save_IR_index[mask_low], np.full_like(save_IR_index[mask_low], -0.2),
+    #             c='red', edgecolor='k', s=100, marker='v')
+
+    plt.axvline(x=-0.3,linestyle='--')
+    plt.axvline(x=0.3,linestyle='--')
+
+    cbar = plt.colorbar(scatter,cmap='gist_rainbow')
+
+    # plt.title(molecule, fontsize=16)
+    plt.grid(True, linestyle='--', alpha=0.6)
+
+    # Show the plot
+    plt.tight_layout()
+    if save:
+        plt.savefig(os.path.join('Figures/concentration/', 'logg_vs_'+molecule+str(sigma_threshold)+'sigma_'+today+'.png')
+                    , bbox_inches='tight', dpi=300)
+    plt.show()
+
 
 def fit_polinomials(HCO_1, C18O_1):
 
@@ -680,11 +803,11 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'DG-Tau'
-    molecule ='HCO+'
-    # molecule ='C18O'
+    source_name = 'V347_Aur'
+    # molecule ='HCO+'
+    molecule ='C18O'
 
-    # calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoord=False)
+    # calculate_concentration_factor(source_name, molecule, n_sigma=1, use_skycoord=True)
 
     # save_concentration_factors_to_file(folder_fits='sdf_and_fits',
     #                                    molecule=molecule,
@@ -693,8 +816,13 @@ if __name__ == "__main__":
 
     # plot_parameters(save=True)
 
-    plot_gravity_vs_spectral_index(filename='text_files/Class_I_for-JCMT-plots.txt', color_map='gist_rainbow',
-                                   molecule=molecule,save=True)
+    plot_stellar_params_and_c_factors(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
+                                      c_factor_file='concentrations_2025-06-01_11_C18O.txt',
+                                      sigma_threshold=1,
+                                      molecule=molecule, save=True, color_map='gist_rainbow')
+
+    # plot_stellar_params_and_coldense(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
+    #                                 map_file='text_files/envelope_mass_2025-05-21_22_C18O.txt',molecule=molecule,save=False)
 
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='hco',
     #                                molecule=molecule,save=True)

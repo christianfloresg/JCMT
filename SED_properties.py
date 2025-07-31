@@ -7,6 +7,10 @@ from dust_extinction.grain_models import WD01
 import astropy.units as u
 import difflib
 import os
+from datetime import date,datetime
+today = str(date.today())
+currentDateAndTime = datetime.now()
+hour_now = str(currentDateAndTime.hour)
 
 def are_names_approximate(name1, name2, threshold=0.8):
     """
@@ -222,6 +226,9 @@ def save_spectral_indices_to_file(save_filename):
             f"{new_values[0]:<30}"  # Source name in 20 bytes
             f"{new_values[1]:<30}"  # 
             f"{new_values[2]:<30}"  #
+            f"{new_values[3]:<30}"  #
+            f"{new_values[4]:<30}"  #
+            f"{new_values[5]:<30}"  #
         )
         # Read the file if it exists, otherwise start with a header
         try:
@@ -232,7 +239,11 @@ def save_spectral_indices_to_file(save_filename):
             header = (
                 f"{'## SourceMame':<30}"
                 f"{'spectral index':<30}"
-                f"{'corrected spectral index':<30}\n"
+                f"{'Av literature':<30}"
+                f"{'corr. spectral index lit':<30}"
+                f"{'Av Connelley':<30}"
+                f"{'corr. spectral index Con':<30}\n"
+
             )
 
             lines = [header]
@@ -269,28 +280,43 @@ def save_spectral_indices_to_file(save_filename):
 
         if isinstance( Av_connelley[ii], np.float64 ) and not np.isnan(Av_connelley[ii]):
             print('using connelley',Av_connelley[ii])
-            near_ir_corrected_flux = extinction_corrected_flux(wavelength=2.17,
+            connelley_near_ir_corrected_flux = extinction_corrected_flux(wavelength=2.17,
                                                                uncorrected_flux=two_mass_flux[ii], Av_mag=Av_connelley[ii])
 
-            twenty_micron_corrected_flux = extinction_corrected_flux(wavelength=wavelength_mid_ir[ii],
+            connelley_twenty_micron_corrected_flux = extinction_corrected_flux(wavelength=wavelength_mid_ir[ii],
                                                                      uncorrected_flux=mid_ir_flux[ii],  Av_mag=Av_connelley[ii])
-        elif isinstance( Av_literature[ii], np.float64 )  and not np.isnan(Av_literature[ii]):
-            print('using literature')
-            near_ir_corrected_flux = extinction_corrected_flux(wavelength=2.17,
-                                                               uncorrected_flux=two_mass_flux[ii], Av_mag=Av_literature[ii])
-            twenty_micron_corrected_flux = extinction_corrected_flux(wavelength=wavelength_mid_ir[ii],
-                                                                     uncorrected_flux=mid_ir_flux[ii],  Av_mag=Av_literature[ii])
+
         else:
-            near_ir_corrected_flux = extinction_corrected_flux(wavelength=2.17,
+            connelley_near_ir_corrected_flux = extinction_corrected_flux(wavelength=2.17,
                                                                uncorrected_flux=two_mass_flux[ii], Av_mag=0)
-            twenty_micron_corrected_flux = extinction_corrected_flux(wavelength=wavelength_mid_ir[ii],
+            connelley_twenty_micron_corrected_flux = extinction_corrected_flux(wavelength=wavelength_mid_ir[ii],
                                                                      uncorrected_flux=mid_ir_flux[ii],  Av_mag=0)
 
-        corrected_spectral_indices = calculate_spectral_index(two_micron_flux=near_ir_corrected_flux * 1e-3, two_micron_wave=2.17,
-                                                    twenty_micron_flux=twenty_micron_corrected_flux * 1e-3,
+
+        if isinstance( Av_literature[ii], np.float64 )  and not np.isnan(Av_literature[ii]):
+            print('using literature')
+            literature_near_ir_corrected_flux = extinction_corrected_flux(wavelength=2.17,
+                                                               uncorrected_flux=two_mass_flux[ii], Av_mag=Av_literature[ii])
+            literature_twenty_micron_corrected_flux = extinction_corrected_flux(wavelength=wavelength_mid_ir[ii],
+                                                                     uncorrected_flux=mid_ir_flux[ii],  Av_mag=Av_literature[ii])
+        else:
+            literature_near_ir_corrected_flux = extinction_corrected_flux(wavelength=2.17,
+                                                               uncorrected_flux=two_mass_flux[ii], Av_mag=0)
+            literature_twenty_micron_corrected_flux = extinction_corrected_flux(wavelength=wavelength_mid_ir[ii],
+                                                                     uncorrected_flux=mid_ir_flux[ii],  Av_mag=0)
+
+        connelley_corrected_spectral_indices = calculate_spectral_index(two_micron_flux=connelley_near_ir_corrected_flux * 1e-3, two_micron_wave=2.17,
+                                                    twenty_micron_flux=connelley_twenty_micron_corrected_flux * 1e-3,
                                                     twenty_micron_wave=wavelength_mid_ir[ii], flux_scale='jansky')
 
-        save_to_file(os.path.join('text_files',save_filename),[star_name[ii],round(spectral_indices,3),round(corrected_spectral_indices,3)])
+        literature_corrected_spectral_indices = calculate_spectral_index(two_micron_flux=literature_near_ir_corrected_flux * 1e-3, two_micron_wave=2.17,
+                                                    twenty_micron_flux=literature_twenty_micron_corrected_flux * 1e-3,
+                                                    twenty_micron_wave=wavelength_mid_ir[ii], flux_scale='jansky')
+
+        save_to_file(os.path.join('text_files',save_filename),
+                     [star_name[ii],round(spectral_indices,3),Av_literature[ii],
+                      round(literature_corrected_spectral_indices,3),Av_connelley[ii]
+                     , round(connelley_corrected_spectral_indices, 3)])
 
 
 if __name__ == "__main__":
@@ -299,15 +325,18 @@ if __name__ == "__main__":
     # molecule ='HCO+'
     molecule ='C18O'
 
-    save_spectral_indices_to_file(save_filename='my_spectral_indices_new.txt')
+    # m=magnitude_to_flux(mag_kband=5, wavelength_microns=2.16)
+    # n=cgs_to_jy_factor(wavelength_microns=2.16)
+    # print(m*n)
+    save_spectral_indices_to_file(save_filename='my_spectral_indices_'+today+'.txt')
 
-    # a=calculate_spectral_index(two_micron_flux=28, two_micron_wave=2.17, twenty_micron_flux=1390, twenty_micron_wave=24,
+    # a=calculate_spectral_index(two_micron_flux=5000, two_micron_wave=2.16, twenty_micron_flux=63300, twenty_micron_wave=22.1,
     #                          flux_scale='jansky')
-    # print(a)
+    # print('spectral index',a)
     # wavelength= 2.17
     # flux = 250e-3*jy_to_cgs_factor(wavelength_microns=wavelength)
     # print (cgs_to_jy_factor(wavelength_microns=wavelength)*flux)
     #
-    # corrected_flux = extinction_corrected_flux(wavelength=wavelength, uncorrected_flux=flux, Av_mag=6.9)
+    # corrected_flux = extinction_corrected_flux(wavelength=wavelength, uncorrected_flux=flux, Av_mag=7.9)
     # print('corrected flux_erg = ',corrected_flux)
     # print('corrected flux_Jy = ',corrected_flux*cgs_to_jy_factor(wavelength_microns=wavelength)*1e3)
