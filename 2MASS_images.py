@@ -32,7 +32,7 @@ def offset_coordinates(ax,skycoord_object):
     # lon.set_coord_type('longitude', 180)
     lon.set_format_unit(u.arcsec)
     # lon.set_ticklabel(rotation=, pad=2)
-    lon.set_ticklabel(size=12)
+    lon.set_ticklabel(size=17)
     lon.set_ticks_position('b')
     lon.set_ticklabel_position('b')
     lon.set_axislabel_position('b')
@@ -40,7 +40,7 @@ def offset_coordinates(ax,skycoord_object):
 
     lat = overlay['lat']
     lat.set_format_unit(u.arcsec)
-    lat.set_ticklabel(size=12)
+    lat.set_ticklabel(size=17)
     lat.set_ticks_position('l')
     lat.set_ticklabel_position('l')
     lat.set_axislabel_position('l')
@@ -280,9 +280,9 @@ python3 2MASS_images.py
 """
 if __name__ == "__main__":
     fits_files_folder='2MASS_files'
-    source_name='T-Tauri'
-    twomass_image_to_png(fits_files_folder,source_name,pctl=99.0)
-    # mass_produce_2mass_images(folder=fits_files_folder,pctl=98.5)
+    source_name='Haro6-33'
+    twomass_image_to_png(fits_files_folder,source_name,pctl=98.5)
+    # mass_produce_2mass_images(folder=fits_files_folder,pctl=99.5)
 
     # sources_to_download_file='text_files/names_to_simbad_names.txt'
     # prepare_sources_to_download(source_name)

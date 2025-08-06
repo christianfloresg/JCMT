@@ -11,7 +11,14 @@ from data_cube_analysis import fit_gaussian_to_spectrum, write_or_update_values\
     , calculate_peak_SNR, integrate_flux_over_velocity, fit_gaussian_2d, find_nearest_index
 from matplotlib.patches import Arc
 import matplotlib.ticker as tkr
+from datetime import date,datetime
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+from scipy.ndimage import rotate
+# from skimage.transform import rotate
 
+today = str(date.today())
+currentDateAndTime = datetime.now()
+hour_now = str(currentDateAndTime.hour)
 
 def create_alternating_circle(ax, skycoord_object, aperture_radius, num_segments=20):
     """
@@ -514,10 +521,11 @@ def offset_coordinates(ax,skycoord_object):
     lon.set_ticklabel_position('b')
     lon.set_axislabel_position('b')
     lon.set_ticks(spacing=20. * u.arcsec)
+    lon.set_ticklabel(size=13)
 
     lat = overlay['lat']
     lat.set_format_unit(u.arcsec)
-    lat.set_ticklabel()
+    lat.set_ticklabel(size=13)
     lat.set_ticks_position('l')
     lat.set_ticklabel_position('l')
     lat.set_axislabel_position('l')
@@ -758,7 +766,7 @@ def create_moment_zero_map(source_name,molecule):
 
     return image_mom_0
 
-def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percentile_outlier=100,save=False,plot=True):
+def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percentile_outlier=100,save=False,plot=True,rotate=False):
     '''
     Create moment maps using BTS coode.
     Need to give the data, velocity, and rms levels.
@@ -790,6 +798,13 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     print ('wcs', moment_0.wcs.wcs_pix2world(moment_0.nx/2, moment_0.ny/2, 0))
 
     image_mom_0 = create_moment_zero_map(source_name, molecule)
+
+    # rotated image only for SCAN data, Check MAP_PA, use *-1 value
+
+    # image_mom_0 = np.nan_to_num(image_mom_0, nan=2.8)
+    if rotate:
+        image_mom_0 = rotate(image_mom_0, angle=rotate, reshape=False)
+
 
     if 'HCO+' in data_cube.molecule:
         aperture_radius = 7.05
@@ -826,33 +841,47 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
 
         float_sigma_vel = float(sigma_vel)
 
-        moment_zero_noise = (0.2*6*float_sigma_vel)**0.5*float_noise_level ## 0.2 is the binning in km/s
+        ### This is the way Carney et al. 2016 defined the noise
+        # moment_zero_noise = (0.2*6*float_sigma_vel)**0.5*float_noise_level ## 0.2 is the binning in km/s
+        # print('old noise', moment_zero_noise)
 
+        moment_zero_noise = (float_sigma_vel*6/0.2)**0.5*float_noise_level*0.2 ## 0.2 is the binning in km/s
 
-        moment_zero_noise_array = moment_zero_noise* np.array([1, 3, 5,10,20,50,80,100,150])
-        # print(noise_level)
+        print('new noise_level ',moment_zero_noise)
+        print('number of velocity pixles', float_sigma_vel*6/0.2)
+
+        if 'HCO+' in data_cube.molecule:
+            moment_zero_noise_array = moment_zero_noise* np.array([1, 3, 5,10, 20, 40, 60, 80, 100,150])
+        elif data_cube.molecule == 'C18O':
+            moment_zero_noise_array = moment_zero_noise* np.array([1,3,5,7,9,12,15,20,30,40])
+    # print(noise_level)
         # print(sigma_vel)
         # print (moment_zero_noise)
+
     except:
         print("can't compute the noise for contours, I usea peak intensity intervals")
-        moment_zero_noise_array = np.array([0.5,0.6, 0.8, 0.95])*np.nanmax(image_mom_0)
+        moment_zero_noise_array = np.array([0.1,0.3,0.5,0.6, 0.8, 0.95])*np.nanmax(image_mom_0)
 
     levels = moment_zero_noise_array
-
+    print('levels', levels)
     ## Moment zero
     ## Moment zero
 
     # plt.figure(figsize=(6, 7))
     # fig1 = plt.subplot(projection=wcs)
     fig1 = plt.subplot(projection=moment_0.wcs)
-    mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower')#,vmax=0.5)
+    ax = fig1.figure
+    mom0_im = fig1.imshow(image_mom_0, cmap=cmap, origin='lower',vmin=0.0)#,vmax=0.5)
     # divider = make_axes_locatable(fig1)
-    # cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = plt.colorbar(mom0_im, fraction=0.048, pad=0.04, format='%.1f')
+    # cax = divider.append_axes(position="top", size="10%", pad=0.05)
+    # cbar_ax = fig1.add_axes([0.3, 0.92, 0.4, 0.03])  # 40% width, centered, above plot
+    cbar = ax.colorbar(mom0_im, location='top', orientation='horizontal', format='%.1f',fraction=0.047,pad=0.01)# fraction=0.048, pad=0.04)
     cbar.set_label(label='Integrated Intensity ' +r'(K km s$^{-1}$)', size=14)
+    cbar.ax.tick_params(labelsize=13, direction='in')
 
     contour = fig1.contour(image_mom_0, levels=levels, colors="black")
     plt.clabel(contour, inline=True, fontsize=8, fmt='%1.2f')
+    plt.tick_params(axis='both', labelsize=24)  # 'both' = x and y
 
     fig1.set_xlabel('RA',size=12)
     fig1.set_ylabel('DEC',size=12)
@@ -872,6 +901,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         print(skycoord_object.to_string('hmsdms'))
         IR_position = fig1.scatter(x=ra_center,y=dec_center, s=150, c='gray', transform=fig1.get_transform('icrs'), marker='x',
                                 clip_on=False,linewidths=3.0)
+        sky_center = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
 
         ### FOr DG Tau
         # ra_offset = 20/3600
@@ -885,6 +915,19 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
                             transform=fig1.get_transform('fk5'),linewidth=2,linestyle='-')
 
         fig1.add_patch(s)
+
+        x_center, y_center = moment_0.wcs.world_to_pixel(sky_center)  ## This one if 2D cube
+
+        ### For most stars
+        pixel_limits_ra = 30.5
+        pixel_limits_dec = 30.5
+
+        #### For T Tauri
+        pixel_limits_ra = 34.
+        pixel_limits_dec = 34.
+
+        fig1.set_xlim(x_center - pixel_limits_ra, x_center + pixel_limits_ra)
+        fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
 
 
     else:
@@ -913,8 +956,8 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         ### if SCAN DATA set some smaller limits
         x_center, y_center = moment_0.wcs.world_to_pixel(sky_center)  ## This one if 2D cube
         print('center in pixels', x_center, y_center)
-        pixel_limits_ra = 35
-        pixel_limits_dec = 35
+        pixel_limits_ra = 34
+        pixel_limits_dec = 34
         fig1.set_xlim(x_center - pixel_limits_ra, x_center + pixel_limits_ra)
         fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
 
@@ -930,10 +973,11 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     # fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
 
     # plt.axis('square')
+    fig1.tick_params(axis='y', direction='in')
 
     if save:
         plt.savefig(os.path.join('Figures/Moment_maps/moment-zero/',
-                                 filename+'clip_'+percentile_outlier_text+'_coord_offset'), bbox_inches='tight',dpi=300)
+                                 filename+'clip_'+percentile_outlier_text+'_coord_offset'+today), bbox_inches='tight',dpi=300)
         # plt.savefig(os.path.join('Figures',filename+'_transparent'), bbox_inches='tight', transparent=True)
 
     if plot:
@@ -1089,22 +1133,22 @@ def mass_measurement_from_molecular_lines(source_name, molecule,distance_pc):
 
 if __name__ == "__main__":
 
-    # source_name = 'IRS5'
-    source_name = 'DG-Tau'
-    molecule ='HCO+'
-    # molecule ='C18O'
+    # source_name = 'EC92'
+    source_name = 'SR24'
+    # molecule ='HCO+'
+    molecule ='C18O'
     # distance = 130
     ## Step 0
     # retrieve_and_write_spectral_properties(source_name, molecule, noskycoord=False)
 
     ### Step 1 creates a plot of the spectrum
-    plot_spectrum(source_name, molecule,type='central',save=True)
+    # plot_spectrum(source_name, molecule,type='central',save=True)
     # plot_spectrum(source_name, molecule,type='fov',save=False)
 
     ### Step 3
     ### Plot the maps
     # area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=1)
-    # plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True,percentile_outlier=100.0)
+    plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True,percentile_outlier=99.3)
     # plot_moment_eight_map(source_name,molecule,save=False)
 
     #### Mass produce moment maps
