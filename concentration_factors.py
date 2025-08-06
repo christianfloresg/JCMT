@@ -373,7 +373,7 @@ def plot_stellar_params_and_coldense(spectrum_file,map_file,molecule='HCO+',save
     plt.show()
 
 
-def plot_stellar_params_and_c_factors(spectrum_file,c_factor_file,sigma_threshold='2',molecule='HCO+',save=False, color_map='gist_rainbow'):
+def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule='HCO+',save=False, use_other_c_cbar=False,color_map='gist_rainbow'):
     '''
     Plot parameters related to the star against parameters related to the maps
     :param spectrum_file:
@@ -385,19 +385,34 @@ def plot_stellar_params_and_c_factors(spectrum_file,c_factor_file,sigma_threshol
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
     vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(spectrum_file)
 
-    star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters(c_factor_file)
+    if molecule=='HCO+':
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters('concentrations_2025-06-02_10_HCO+.txt')
+        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other = read_c_factor_parameters('concentrations_2025-06-01_11_C18O.txt')
+        other_molecule = 'C18O'
+    elif molecule=='C18O':
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters('concentrations_2025-06-01_11_C18O.txt')
+        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other = read_c_factor_parameters('concentrations_2025-06-02_10_HCO+.txt')
+        other_molecule = 'HCO+'
+    else:
+        ValueError('only two values are possible C18O or HCO+')
+
 
     if sigma_threshold ==1:
         c_factor_n_sigma = c_factor_1_sigma
+        c_factor_n_sigma_other = c_factor_1_sigma_other
     elif sigma_threshold==2:
         c_factor_n_sigma = c_factor_2_sigma
+        c_factor_n_sigma_other = c_factor_2_sigma_other
     elif sigma_threshold==3:
         c_factor_n_sigma = c_factor_3_sigma
+        c_factor_n_sigma_other = c_factor_2_sigma_other
+
     else:
         raise ValueError("Number must be 1, 2, or 3 sigmas.")
 
-    save_temp, save_logg, save_IR_index, save_this_c_factor=[],[],[],[]
+    save_name, save_temp, save_logg, save_logg_uncert_h,save_logg_uncert_l, save_IR_index, save_this_c_factor, save_other_c_factor=[],[],[],[],[],[],[],[]
 
+    #### get the spectral parameters associated to the sources of the main molecule
     for ii in range(len(star_name)):
         c_factor_aux=0.0
         for jj in range(len(star_name_map)):
@@ -410,27 +425,65 @@ def plot_stellar_params_and_c_factors(spectrum_file,c_factor_file,sigma_threshol
 
                 print(c_factor_aux,type(c_factor_aux))
                 continue
-
+        save_name = np.append(save_name, star_name[ii])
         save_temp = np.append(save_temp, Temp_values[ii])
         save_logg = np.append(save_logg, logg_values[ii])
+        save_logg_uncert_h = np.append(save_logg_uncert_h, logg_uncertainty[0][ii])
+        save_logg_uncert_l = np.append(save_logg_uncert_l, logg_uncertainty[1][ii])
+
         save_this_c_factor = np.append(save_this_c_factor, c_factor_aux)
         save_IR_index = np.append(save_IR_index,ir_index_values[ii])
+
+
+    #### get the spectral parameters associated to the sources of the main molecule
+    for ii in range(len(save_name)):
+        c_factor_aux=0.0
+        for jj in range(len(star_name_map_other)):
+            if are_names_approximate(save_name[ii], star_name_map_other[jj], threshold=0.9):
+                print(save_name[ii], star_name_map_other[jj], c_factor_n_sigma_other[jj])
+                if math.isnan(c_factor_n_sigma_other[jj]) or c_factor_n_sigma_other[jj] == float('-inf'):
+                    c_factor_aux = 0.0
+                else:
+                    c_factor_aux = c_factor_n_sigma_other[jj]
+
+                print(c_factor_aux,type(c_factor_aux))
+                continue
+
+        save_other_c_factor = np.append(save_other_c_factor, c_factor_aux)
+
 
     # Separate the points lower than X
     save_temp = np.array(save_temp)
     save_logg = np.array(save_logg)
+    # save_logg_uncert = np.array(save_logg_uncert)
     save_IR_index = np.array(save_IR_index)
     save_this_c_factor = np.array(save_this_c_factor)
+    save_other_c_factor = np.array(save_other_c_factor)
+
 
     mask_low = save_this_c_factor < -0.2
     mask_good = ~mask_low
 
     # # Scatter for 'good' c_factors
-    # scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
-    #                       c=save_this_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
 
-    scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
+    print(save_logg_uncert_l,save_logg_uncert_h)
+    if use_other_c_cbar:
+        scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
+                              c=save_other_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
+
+        plt.scatter(save_logg[mask_low] / 1.e2, np.full_like(save_logg[mask_low], -0.2),
+                    c=save_other_c_factor[mask_low], edgecolor='k', s=100, marker='v')
+
+
+    # Add error bars on top of the scatter plot
+        _, caps, bars = plt.errorbar(x=save_logg[mask_good]/1.e2, y=save_this_c_factor[mask_good],
+                                              xerr=[save_logg_uncert_l[mask_good]/1.e2,save_logg_uncert_h[mask_good]/1.e2],
+                                    fmt='none', ecolor='gray', capsize=4, alpha=0.5, zorder=1)
+
+    else:
+        scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
                           c=save_this_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
+
 
     # # Scatter for 'low' c_factors as down arrows at c_factor=-0.3
     # Use marker='v' for down arrow. We'll plot at y=-0.3, but color by the *real* c_factor value
@@ -443,6 +496,13 @@ def plot_stellar_params_and_c_factors(spectrum_file,c_factor_file,sigma_threshol
     #                       c=save_this_c_factor, cmap=color_map, edgecolor='k', s=100, vmin=0.1,vmax=0.8)
     # print(save_IR_index,)
 
+    #####################################################################
+    #### plot the names of the sources with C>0.2
+    # mask_name = save_this_c_factor > 0.2
+    #
+    # for ii in range(len(save_name[mask_name])):
+    #     plt.text(x=save_logg[mask_name][ii]/1.e2, y=save_this_c_factor[mask_name][ii], s=save_name[mask_name][ii], size=12,
+    #              color='k')
 
     # Add labels and title
 
@@ -459,11 +519,11 @@ def plot_stellar_params_and_c_factors(spectrum_file,c_factor_file,sigma_threshol
     # plt.ylim(-0.3,1.0)
 
     # Add labels and title
-    plt.ylabel('C18O', fontsize=14)
+    plt.ylabel(molecule, fontsize=14)
     # plt.ylabel('HCO+', fontsize=14)
 
     # plt.xlabel('Corrected alpha index', fontsize=14)
-    plt.ylim(-0.3,1.0)
+    # plt.ylim(-0.3,1.0)
 
     # plt.title(str(sigma_threshold)+' sigma threshold')
     # scatter = plt.scatter(save_IR_index,save_this_c_factor,
@@ -472,10 +532,16 @@ def plot_stellar_params_and_c_factors(spectrum_file,c_factor_file,sigma_threshol
     # plt.scatter(save_IR_index[mask_low], np.full_like(save_IR_index[mask_low], -0.2),
     #             c='red', edgecolor='k', s=100, marker='v')
 
-    plt.axvline(x=-0.3,linestyle='--')
-    plt.axvline(x=0.3,linestyle='--')
+    # plt.axvline(x=-0.3,linestyle='--')
+    # plt.axvline(x=0.3,linestyle='--')
 
     cbar = plt.colorbar(scatter,cmap='gist_rainbow')
+
+    cbar.set_label(label='C-factor ' + molecule, size=14)
+
+    if use_other_c_cbar:
+        cbar.set_label(label='C-factor ' + other_molecule, size=14)
+
 
     # plt.title(molecule, fontsize=16)
     plt.grid(True, linestyle='--', alpha=0.6)
@@ -804,8 +870,8 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 if __name__ == "__main__":
 
     source_name = 'V347_Aur'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    molecule ='HCO+'
+    # molecule ='C18O'
 
     # calculate_concentration_factor(source_name, molecule, n_sigma=1, use_skycoord=True)
 
@@ -817,9 +883,8 @@ if __name__ == "__main__":
     # plot_parameters(save=True)
 
     plot_stellar_params_and_c_factors(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
-                                      c_factor_file='concentrations_2025-06-01_11_C18O.txt',
-                                      sigma_threshold=1,
-                                      molecule=molecule, save=True, color_map='gist_rainbow')
+                                      sigma_threshold=2,
+                                      molecule=molecule, save=True, color_map='gist_rainbow', use_other_c_cbar=True)
 
     # plot_stellar_params_and_coldense(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
     #                                 map_file='text_files/envelope_mass_2025-05-21_22_C18O.txt',molecule=molecule,save=False)
