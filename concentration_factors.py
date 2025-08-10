@@ -435,6 +435,7 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
         save_IR_index = np.append(save_IR_index,ir_index_values[ii])
 
 
+
     #### get the spectral parameters associated to the sources of the main molecule
     for ii in range(len(save_name)):
         c_factor_aux=0.0
@@ -446,11 +447,22 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
                 else:
                     c_factor_aux = c_factor_n_sigma_other[jj]
 
-                print(c_factor_aux,type(c_factor_aux))
+                # print(c_factor_aux,type(c_factor_aux))
                 continue
 
         save_other_c_factor = np.append(save_other_c_factor, c_factor_aux)
 
+    print('logg values')
+    print(save_logg/1.e2)
+    print('logg uncertainties positive')
+    print(save_logg_uncert_h/1.e2)
+    print('logg uncertainties negative')
+    print(save_logg_uncert_l/1.e2)
+    print('C-factor_HCO+')
+    print(save_this_c_factor)
+    print('C-factor_C18O')
+    print(save_other_c_factor)
+    print(len(save_logg),len(save_this_c_factor),len(save_other_c_factor))
 
     # Separate the points lower than X
     save_temp = np.array(save_temp)
@@ -467,12 +479,13 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
     # # Scatter for 'good' c_factors
 
     print(save_logg_uncert_l,save_logg_uncert_h)
+
     if use_other_c_cbar:
         scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
-                              c=save_other_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
+                              c=save_other_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.2)
 
         plt.scatter(save_logg[mask_low] / 1.e2, np.full_like(save_logg[mask_low], -0.2),
-                    c=save_other_c_factor[mask_low], edgecolor='k', s=100, marker='v')
+                    c=save_other_c_factor[mask_low], cmap=color_map, edgecolor='k', s=100, marker='v', vmin=0.0)
 
 
     # Add error bars on top of the scatter plot
@@ -480,15 +493,21 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
                                               xerr=[save_logg_uncert_l[mask_good]/1.e2,save_logg_uncert_h[mask_good]/1.e2],
                                     fmt='none', ecolor='gray', capsize=4, alpha=0.5, zorder=1)
 
+        _, caps, bars = plt.errorbar(x=save_logg[mask_low]/1.e2, y=np.full_like(save_logg[mask_low], -0.2),
+                                              xerr=[save_logg_uncert_l[mask_low]/1.e2,save_logg_uncert_h[mask_low]/1.e2],
+                                    fmt='none', ecolor='gray', capsize=4, alpha=0.5, zorder=1)
+
     else:
         scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
                           c=save_this_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
 
+    plt.xlim(2.65,4.15)
+
 
     # # Scatter for 'low' c_factors as down arrows at c_factor=-0.3
     # Use marker='v' for down arrow. We'll plot at y=-0.3, but color by the *real* c_factor value
-    plt.scatter(save_logg[mask_low]/1.e2, np.full_like(save_logg[mask_low], -0.2),
-                c='red', edgecolor='k', s=100, marker='v')
+    # plt.scatter(save_logg[mask_low]/1.e2, np.full_like(save_logg[mask_low], -0.2),
+    #             c='red', edgecolor='k', s=100, marker='v')
 
 
     # Scatter for 'good' c_factors
