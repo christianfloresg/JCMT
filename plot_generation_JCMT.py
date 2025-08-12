@@ -14,6 +14,15 @@ import matplotlib.ticker as tkr
 from datetime import date,datetime
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from scipy.ndimage import rotate
+from astropy.stats import sigma_clip
+
+import os
+from astropy.modeling import models, fitting
+from astropy.nddata import NDData
+from astropy.visualization import simple_norm
+# from photutils.aperture import CircularAperture, aperture_photometry
+from photutils.aperture import CircularAperture, EllipticalAperture, aperture_photometry
+
 # from skimage.transform import rotate
 
 today = str(date.today())
@@ -709,7 +718,7 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
 
     threshold = n_sigma * moment_zero_noise  # Adjust threshold factor if needed
     print('n sigma threshold ',threshold)
-    threshold = 0.13  # Adjusted for Perseus & V347 Aur
+    # threshold = 0.13  # Adjusted for Perseus & V347 Aur
     # threshold = 0.065  # Adjusted for Orion
     # threshold = 0.3  # Adjust threshold factor if needed
 
@@ -745,6 +754,237 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
         plt.show()
     return area_of_significant_emission, total_emission
 
+
+def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics=False):
+    """
+    Fit a 2D Gaussian to the moment-0 map with the center allowed to move up to ±5 arcsec
+    from the near-IR source coordinates. Define Robs from the fitted FWHM_circ (see note below).
+    Area = π * Robs^2 (arcsec^2). Total emission is the moment-0 sum within a circular aperture
+    of radius Robs, normalized by pixels-per-beam.
+
+    NOTE: If you want Robs to be the half-max radius, set Robs_arcsec = 0.5 * FWHM_circ_arcsec.
+    """
+
+    # ---------- helpers ----------
+    def _safe_aperture_sum(data2d, x0, y0, r_pix):
+        if not np.isfinite(r_pix) or r_pix <= 0:
+            return 0.0, 0
+        ny, nx = data2d.shape
+        if (x0 + r_pix < 0) or (y0 + r_pix < 0) or (x0 - r_pix > nx - 1) or (y0 - r_pix > ny - 1):
+            return 0.0, 0
+        finite_mask = np.isfinite(data2d)
+        data_clean = np.where(finite_mask, data2d, 0.0)
+        ap = CircularAperture((x0, y0), r=r_pix)
+        m = ap.to_mask(method='exact')
+        cutout = m.multiply(data_clean)
+        if cutout is None:
+            return 0.0, 0
+        finite_cut = m.multiply(finite_mask.astype(float))
+        n_finite = int(np.count_nonzero(finite_cut > 0))
+        return float(np.sum(cutout)), n_finite
+
+    # ---------- load data ----------
+    filename = f"{source_name}_{molecule}"
+    data_cube = DataAnalysis(os.path.join('sdf_and_fits', source_name), filename + '.fits')
+    image_mom_0 = create_moment_zero_map(source_name, molecule)  # 2D array
+
+    # Near-IR center from SIMBAD
+    simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt',
+                                             search_word=source_name)
+    skycoord_object = get_icrs_coordinates(simbad_name)
+    x0, y0 = data_cube.wcs.celestial.world_to_pixel(skycoord_object)
+
+    # Pixel scales (arcsec/pixel); use absolute values
+    pixscale_x = abs(data_cube.cdelt_ra)
+    pixscale_y = abs(data_cube.cdelt_dec)
+    pixel_area_arcsec2 = pixscale_x * pixscale_y
+
+    # Pixels-per-beam (fallback circular beam from your constants)
+    if 'HCO+' in data_cube.molecule:
+        aperture_radius = 7.05  # arcsec (your "FWHM/2" convention)
+    elif data_cube.molecule == 'C18O':
+        aperture_radius = 7.635
+    else:
+        raise Exception("Sorry, I need to calculate such aperture radius")
+    pix_per_beam = ((2 * aperture_radius) ** 2 * np.pi / (4.0 * np.log(2.0))) / pixel_area_arcsec2
+    if not np.isfinite(pix_per_beam) or pix_per_beam <= 0:
+        raise ValueError(f"Invalid pix_per_beam: {pix_per_beam}")
+
+    # ---------- prep data for fitting ----------
+    data = np.array(image_mom_0, dtype=float)
+    base_nan_mask = ~np.isfinite(data)
+    if np.all(base_nan_mask):
+        return (0.0, 0.0, {"reason": "all_nan_map"}) if diagnostics else (0.0, 0.0)
+
+    # very loose clip or none; you can set sigma=None to disable clipping entirely
+    clipped = sigma_clip(data, sigma=1000, masked=True)
+    clip_mask = getattr(clipped, 'mask', None)
+    clip_mask = np.array(clip_mask, dtype=bool) if clip_mask is not None else np.zeros_like(data, dtype=bool)
+    fit_mask = base_nan_mask | clip_mask
+    yy, xx = np.mgrid[:data.shape[0], :data.shape[1]]
+
+    # Ensure starting center is inside image
+    x0 = float(np.clip(x0, 0, data_cube.nx - 1))
+    y0 = float(np.clip(y0, 0, data_cube.ny - 1))
+
+    # ---------- build & run fit (center free but bounded to ±5 arcsec) ----------
+    amp0 = np.nanmax(data)
+    sigx0 = 2.0  # px initial guess
+    sigy0 = 2.0
+    theta0 = 0.0
+
+    g_init = models.Gaussian2D(amplitude=amp0,
+                               x_mean=x0, y_mean=y0,
+                               x_stddev=sigx0, y_stddev=sigy0,
+                               theta=theta0)
+
+    # CHANGED: allow center to move, with bounds of ±5 arcsec (per axis), clipped to image
+    max_shift_arcsec = 5.0
+    dx_pix = max_shift_arcsec / pixscale_x if pixscale_x > 0 else 0.0
+    dy_pix = max_shift_arcsec / pixscale_y if pixscale_y > 0 else 0.0
+
+    x_min = float(max(0, x0 - dx_pix))
+    x_max = float(min(data_cube.nx - 1, x0 + dx_pix))
+    y_min = float(max(0, y0 - dy_pix))
+    y_max = float(min(data_cube.ny - 1, y0 + dy_pix))
+
+    g_init.x_mean.fixed = False
+    g_init.y_mean.fixed = False
+    g_init.x_mean.min = x_min
+    g_init.x_mean.max = x_max
+    g_init.y_mean.min = y_min
+    g_init.y_mean.max = y_max
+
+    # Your width bounds (you can keep your beam-based mins if you prefer)
+    g_init.x_stddev.min = 3.4
+    g_init.y_stddev.min = 3.4
+    g_init.x_stddev.max = max(10.0, data.shape[1] / 2.0)
+    g_init.y_stddev.max = max(10.0, data.shape[0] / 2.0)
+
+    fitter = fitting.LevMarLSQFitter()
+    fit = fitter(g_init, xx[~fit_mask], yy[~fit_mask], data[~fit_mask])
+
+    # Use fitted center from now on
+    x_fit = float(fit.x_mean.value)
+    y_fit = float(fit.y_mean.value)
+
+    # ---------- FWHM & Robs ----------
+    k = 2.0 * np.sqrt(2.0 * np.log(2.0))
+    FWHM_x_arcsec = k * float(fit.x_stddev.value) * pixscale_x
+    FWHM_y_arcsec = k * float(fit.y_stddev.value) * pixscale_y
+    FWHM_circ_arcsec = float(np.sqrt(FWHM_x_arcsec * FWHM_y_arcsec))
+
+    # Choose ONE: half-max radius (recommended) or your current "full FWHM as radius"
+    # Robs_arcsec = 0.5 * FWHM_circ_arcsec
+    Robs_arcsec = FWHM_circ_arcsec  # keep your current choice unless you change your convention
+
+    # radius sanity clamp
+    fov_x_arcsec = data_cube.nx * pixscale_x
+    fov_y_arcsec = data_cube.ny * pixscale_y
+    max_reasonable = 0.75 * max(fov_x_arcsec, fov_y_arcsec)
+    rob_clamped = False
+    if (not np.isfinite(Robs_arcsec)) or (Robs_arcsec <= 0) or (Robs_arcsec > max_reasonable):
+        Robs_arcsec = max_reasonable
+        rob_clamped = True
+
+    area_arcsec2 = float(np.pi * (Robs_arcsec ** 2))
+
+    # ---------- robust emission inside Robs (centered on the FITTED center) ----------
+    if not np.isfinite(pixscale_x) or pixscale_x == 0:
+        raise ValueError("Invalid pixel scale (pixscale_x).")
+    Robs_pix = max(Robs_arcsec / pixscale_x, 0.0)
+
+    sum_mom0_inside, n_finite = _safe_aperture_sum(image_mom_0, x_fit, y_fit, Robs_pix)
+    total_emission = 0.0 if n_finite == 0 else float(sum_mom0_inside / pix_per_beam)
+
+    # ---------- optional plotting ----------
+    if plot:
+        ny, nx = data.shape
+        model_img = fit(xx, yy)
+        residuals = data - model_img
+
+        vmin = np.nanpercentile(data, 5)
+        vmax = np.nanpercentile(data, 99)
+
+        fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+        im0 = axes[0].imshow(data, origin='lower', cmap='inferno',
+                             norm=simple_norm(data, 'linear', vmin=vmin, vmax=vmax))
+        # mark NIR center and fitted center
+        axes[0].plot(x0,   y0,  '+', color='cyan',  ms=10, mew=2, label='NIR center')
+        axes[0].plot(x_fit,y_fit,'x', color='white', ms=10, mew=2, label='Fitted center')
+        axes[0].legend(loc='upper right', fontsize=8)
+        axes[0].set_title(f"{source_name} {molecule} | Data")
+        fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
+
+        im1 = axes[1].imshow(model_img, origin='lower', cmap='inferno',
+                             norm=simple_norm(model_img, 'linear', vmin=vmin, vmax=vmax))
+        axes[1].plot(x_fit, y_fit, 'x', color='white', ms=10, mew=2)
+        axes[1].set_title("Gaussian Model")
+        fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+
+        im2 = axes[2].imshow(residuals, origin='lower', cmap='coolwarm')
+        axes[2].plot(x_fit, y_fit, 'x', color='k', ms=10, mew=2)
+        axes[2].set_title("Residuals")
+        fig.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
+
+        # Overlay FWHM ellipse (semi-axes = FWHM/2) and Robs circle at the FITTED center
+        a_pix = (FWHM_x_arcsec / 2.0) / pixscale_x
+        b_pix = (FWHM_y_arcsec / 2.0) / pixscale_y
+        ell = EllipticalAperture((x_fit, y_fit), a=a_pix, b=b_pix, theta=float(fit.theta.value))
+        circ = CircularAperture((x_fit, y_fit), r=Robs_pix)
+        for ax in (axes[0], axes[1]):
+            ell.plot(ax=ax, color='lime', lw=1.8, label='FWHM ellipse (half-max)')
+            circ.plot(ax=ax, color='deepskyblue', lw=1.6, label='Robs circle = ' + str(round(Robs_arcsec,1)) + '″')
+            ax.legend(loc='upper right', fontsize=8)
+
+        plt.tight_layout()
+        plt.show()
+
+    # ---------- diagnostics ----------
+    if diagnostics:
+        ny, nx = data.shape
+        model_img = fit(xx, yy)
+        residuals = data - model_img
+        valid = np.isfinite(data) & np.isfinite(model_img)
+        res = residuals[valid]
+        dat = data[valid]
+        sse = float(np.sum(res**2))
+        sst = float(np.sum((dat - np.mean(dat))**2)) if np.size(dat) > 1 else np.nan
+        r2_like = float(1.0 - (sse / sst)) if (np.isfinite(sst) and sst > 0) else np.nan
+
+        # center shift diagnostics
+        dx_fit_arc = (x_fit - x0) * pixscale_x
+        dy_fit_arc = (y_fit - y0) * pixscale_y
+        shift_arc = float(np.hypot(dx_fit_arc, dy_fit_arc))
+        hit_x_bound = bool(np.isclose(x_fit, x_min) or np.isclose(x_fit, x_max))
+        hit_y_bound = bool(np.isclose(y_fit, y_min) or np.isclose(y_fit, y_max))
+
+        diag = {
+            "nir_center_pix": (float(x0), float(y0)),
+            "fitted_center_pix": (float(x_fit), float(y_fit)),
+            "center_shift_arcsec": {"dx": float(dx_fit_arc), "dy": float(dy_fit_arc), "dr": shift_arc},
+            "center_bounds_pix": {"x_min": x_min, "x_max": x_max, "y_min": y_min, "y_max": y_max},
+            "center_hit_bound": {"x": hit_x_bound, "y": hit_y_bound},
+            "amplitude": float(fit.amplitude.value),
+            "sigma_x_pix": float(fit.x_stddev.value),
+            "sigma_y_pix": float(fit.y_stddev.value),
+            "theta_rad": float(fit.theta.value),
+            "FWHM_x_arcsec": float(FWHM_x_arcsec),
+            "FWHM_y_arcsec": float(FWHM_y_arcsec),
+            "FWHM_circ_arcsec": float(FWHM_circ_arcsec),
+            "Robs_arcsec": float(Robs_arcsec),
+            "pix_per_beam": float(pix_per_beam),
+            "n_finite_in_aperture": int(n_finite),
+            "robust_radius_clamped": bool(rob_clamped),
+            "r2_like": r2_like,
+            "fit_message": getattr(fitter, "fit_info", {}).get("message", None),
+            "fit_ierr": getattr(fitter, "fit_info", {}).get("ierr", None),
+            "fit_nfev": getattr(fitter, "fit_info", {}).get("nfev", None),
+        }
+        print("center_shift_arcsec ",shift_arc)
+        return area_arcsec2, total_emission#, diag
+
+    return area_arcsec2, total_emission
 
 def create_moment_zero_map(source_name,molecule):
     '''

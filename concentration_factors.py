@@ -35,7 +35,7 @@ def are_names_approximate(name1, name2, threshold=0.8):
     # Return True if similarity exceeds the threshold
     return similarity >= threshold
 
-def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoord=True):
+def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoord=True, gaussian_fit=False,plot=False):
     '''
     Calculate concentration factors from molecular data as defined
     in van Kempen 2009 and Carney 2016
@@ -59,7 +59,14 @@ def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoor
 
     beam_size = np.pi/(4*np.log(2)) * (2 * aperture_radius)**2
     peak_integrated_emission = peak_integrated_emission_from_map(source_name, molecule, use_skycoord=use_skycoord) ### This one requires object information.
-    area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=True)
+
+    if gaussian_fit:
+        area, integrated_emission = area_and_emission_via_gaussian(source_name, molecule, plot=plot, diagnostics=True)
+
+    else:
+        area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=plot)
+
+
     concentration = 1 - beam_size / area * integrated_emission / peak_integrated_emission
     rounded_concentration = round(concentration,3)
     print(f"For {source_name}, the concentration factor is {rounded_concentration}")
@@ -75,6 +82,7 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
             f"{new_values[1]:<20}"  # 
             f"{new_values[2]:<20}"  #
             f"{new_values[3]:<20}"  #
+            f"{new_values[4]:<20}"  #
 
         )
         # Read the file if it exists, otherwise start with a header
@@ -87,7 +95,8 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
                 f"{'## SourceMame':<20}"
                 f"{'c-factor_1sigma':<20}"
                 f"{'c-factor_2sigma':<20}"
-                f"{'c-factor_3sigma':<20}\n"
+                f"{'c-factor_3sigma':<20}"
+                f"{'c-factor_gaussian':<20}\n"
             )
 
             lines = [header]
@@ -123,11 +132,16 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
                 print(f"No such file: {fits_file_path}. Skipping this folder.")
                 continue  # Move to the next folder if the file doesn't exist
 
-            concentration_1sigma = round(calculate_concentration_factor(sources, molecule, n_sigma=1),4)
-            concentration_2sigma = round(calculate_concentration_factor(sources, molecule, n_sigma=2),4)
-            concentration_3sigma = round(calculate_concentration_factor(sources, molecule, n_sigma=3),4)
+            concentration_1sigma = round(calculate_concentration_factor(sources, molecule,
+                                                                        n_sigma=1, plot=False, gaussian_fit=False),4)
+            concentration_2sigma = round(calculate_concentration_factor(sources, molecule,
+                                                                        n_sigma=2, plot=False, gaussian_fit=False),4)
+            concentration_3sigma = round(calculate_concentration_factor(sources, molecule,
+                                                                        n_sigma=3, plot=False, gaussian_fit=False),4)
+            concentration_gaussian = round(calculate_concentration_factor(sources, molecule,
+                                                                          plot=False, gaussian_fit=True),4)
 
-            new_values = [sources, concentration_1sigma,concentration_2sigma, concentration_3sigma]
+            new_values = [sources, concentration_1sigma,concentration_2sigma, concentration_3sigma,concentration_gaussian]
 
             save_to_file(save_filename,new_values)
 
@@ -888,22 +902,22 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'V347_Aur'
+    source_name = 'WLY2-42'
     molecule ='HCO+'
     # molecule ='C18O'
 
-    # calculate_concentration_factor(source_name, molecule, n_sigma=1, use_skycoord=True)
-
-    # save_concentration_factors_to_file(folder_fits='sdf_and_fits',
-    #                                    molecule=molecule,
-    #                                    save_filename='concentrations_'+ today + '_' + hour_now + '_' + molecule+'.txt')
+    # calculate_concentration_factor(source_name, molecule, n_sigma=1, gaussian_fit=True, plot=True, use_skycoord=True)
+    #
+    save_concentration_factors_to_file(folder_fits='sdf_and_fits',
+                                       molecule=molecule,
+                                       save_filename='concentrations_'+ today + '_' + hour_now + '_' + molecule+'.txt')
 
 
     # plot_parameters(save=True)
 
-    plot_stellar_params_and_c_factors(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
-                                      sigma_threshold=2,
-                                      molecule=molecule, save=True, color_map='gist_rainbow', use_other_c_cbar=True)
+    # plot_stellar_params_and_c_factors(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
+    #                                   sigma_threshold=2,
+    #                                   molecule=molecule, save=True, color_map='gist_rainbow', use_other_c_cbar=True)
 
     # plot_stellar_params_and_coldense(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
     #                                 map_file='text_files/envelope_mass_2025-05-21_22_C18O.txt',molecule=molecule,save=False)
