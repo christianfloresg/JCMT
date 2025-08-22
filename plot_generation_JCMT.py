@@ -817,7 +817,7 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
         return (0.0, 0.0, {"reason": "all_nan_map"}) if diagnostics else (0.0, 0.0)
 
     # very loose clip or none; you can set sigma=None to disable clipping entirely
-    clipped = sigma_clip(data, sigma=1000, masked=True)
+    clipped = sigma_clip(data, sigma=120, masked=True)
     clip_mask = getattr(clipped, 'mask', None)
     clip_mask = np.array(clip_mask, dtype=bool) if clip_mask is not None else np.zeros_like(data, dtype=bool)
     fit_mask = base_nan_mask | clip_mask
@@ -828,8 +828,8 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
     y0 = float(np.clip(y0, 0, data_cube.ny - 1))
 
     # ---------- build & run fit (center free but bounded to ±5 arcsec) ----------
-    amp0 = np.nanmax(data)
-    sigx0 = 2.0  # px initial guess
+    amp0 = np.nanmax(data)*0.5
+    sigx0 = 2.0  # px initial guess / the pixel size is 2 arcsec per pixel
     sigy0 = 2.0
     theta0 = 0.0
 
@@ -839,7 +839,7 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
                                theta=theta0)
 
     # CHANGED: allow center to move, with bounds of ±5 arcsec (per axis), clipped to image
-    max_shift_arcsec = 5.0
+    max_shift_arcsec = 3.0
     dx_pix = max_shift_arcsec / pixscale_x if pixscale_x > 0 else 0.0
     dy_pix = max_shift_arcsec / pixscale_y if pixscale_y > 0 else 0.0
 
@@ -878,6 +878,7 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
     # Robs_arcsec = 0.5 * FWHM_circ_arcsec
     Robs_arcsec = FWHM_circ_arcsec  # keep your current choice unless you change your convention
 
+    # Robs_arcsec = 35
     # radius sanity clamp
     fov_x_arcsec = data_cube.nx * pixscale_x
     fov_y_arcsec = data_cube.ny * pixscale_y
@@ -981,7 +982,8 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
             "fit_ierr": getattr(fitter, "fit_info", {}).get("ierr", None),
             "fit_nfev": getattr(fitter, "fit_info", {}).get("nfev", None),
         }
-        print("center_shift_arcsec ",shift_arc)
+        # print('center shift = ', shift_arc)
+        print(diag)
         return area_arcsec2, total_emission#, diag
 
     return area_arcsec2, total_emission

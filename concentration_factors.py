@@ -243,9 +243,9 @@ def read_map_parameters(filename):
     star_name = our_data['col1']#our_data[:, 0]
     T_mb = our_data['col5']#our_data[:, 4]
     S_peak = our_data['col10']#our_data[:, 9]
-    S_area = our_data['col11']#our_data[:, 10]
+    S_peak_uncert = our_data['col11']#our_data[:, 10]
 
-    return T_mb,S_peak,S_area, star_name
+    return T_mb,S_peak,S_peak_uncert, star_name
 
 
 def read_ir_index_parameters(filename):
@@ -294,11 +294,14 @@ def read_c_factor_parameters(filename):
     c_factor_1_sigma = our_data['col2']#our_data[:, 4]
     c_factor_2_sigma = our_data['col3']#our_data[:, 9]
     c_factor_3_sigma = our_data['col4']#our_data[:, 9]
+    try:
+        c_factor_gaussian = our_data['col5']#our_data[:, 9]
+        return star_name, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma, c_factor_gaussian
+    except:
+        return star_name, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma
 
-    return star_name, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma
 
-
-def plot_spectral_vs_map_parameters(spectrum_file,map_file,molecule='HCO+',save=False):
+def plot_spectral_vs_map_parameters(spectrum_file,spectral_map_file, color_map='gist_rainbow',molecule='HCO+',sigma_threshold=2,save=False):
     '''
     Plot parameters related to the star against parameters related to the maps
     :param spectrum_file:
@@ -311,30 +314,137 @@ def plot_spectral_vs_map_parameters(spectrum_file,map_file,molecule='HCO+',save=
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
     vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(spectrum_file)
 
-    T_mb, S_peak, S_area,star_name_map = read_map_parameters(map_file)
+    T_mb, S_beam, S_beam_uncert, star_spectral_map = read_map_parameters(spectral_map_file)
 
+    S_beam = np.array(S_beam)
+
+    if molecule=='HCO+':
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma,\
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_22_HCO+.txt')
+
+    elif molecule=='C18O':
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma, \
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_23_C18O.txt')
+
+    else:
+        ValueError('only two values are possible C18O or HCO+')
+
+
+    if sigma_threshold ==1:
+        c_factor_n_sigma = c_factor_1_sigma
+    elif sigma_threshold==2:
+        c_factor_n_sigma = c_factor_2_sigma
+    elif sigma_threshold==3:
+        c_factor_n_sigma = c_factor_3_sigma
+    else:
+        c_factor_n_sigma = c_factor_gaussian
+        # raise ValueError("Number must be 1, 2, or 3 sigmas.")
+
+    save_name, save_temp, save_logg, save_logg_uncert_h,\
+    save_logg_uncert_l, save_IR_index, save_this_c_factor, save_S_beam, save_S_beam_uncert= [],[],[],[],[],[],[],[],[]
+
+    #### get the spectral parameters associated to the sources of the main molecule
     for ii in range(len(star_name)):
+        c_factor_aux=0.0
         for jj in range(len(star_name_map)):
             if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
-                print(star_name[ii], star_name_map[jj])
-                # plt.scatter(logg_values[ii]/100., S_peak[jj], color='red', edgecolor='k', s=100)
-                plt.scatter(logg_values[ii]/100., S_area[jj], color='orange', edgecolor='k', s=100)
-                # plt.scatter(logg_values[ii]/100., T_mb[jj], color='blue', edgecolor='k', s=100)
+                # print(star_name[ii], star_name_map[jj], c_factor_n_sigma[jj],logg_values[ii])
+                # print(ii)
+
+                if math.isnan(c_factor_n_sigma[jj]) or c_factor_n_sigma[jj] == float('-inf'):
+                    c_factor_aux = 0.0
+                else:
+                    c_factor_aux = c_factor_n_sigma[jj]
+
+                continue
+        save_name = np.append(save_name, star_name[ii])
+        save_temp = np.append(save_temp, Temp_values[ii])
+        save_logg = np.append(save_logg, logg_values[ii])
+        save_logg_uncert_h = np.append(save_logg_uncert_h, logg_uncertainty[0][ii])
+        save_logg_uncert_l = np.append(save_logg_uncert_l, logg_uncertainty[1][ii])
+
+        save_this_c_factor = np.append(save_this_c_factor, c_factor_aux)
+        save_IR_index = np.append(save_IR_index,ir_index_values[ii])
+
+
+    #### get the integrated intensities associated with the sources
+    for ii in range(len(save_name)):
+
+        if save_this_c_factor[ii] == 0.0:
+            save_S_beam = np.append(save_S_beam,0)
+            print(ii, save_name[ii])
+
+        else:
+            for jj in range(len(star_spectral_map)):
+
+                if are_names_approximate(save_name[ii], star_spectral_map[jj], threshold=0.9):
+                    print(ii,save_name[ii],star_spectral_map[jj], S_beam[jj])
+
+                    save_S_beam = np.append(save_S_beam,S_beam[jj])
+                    save_S_beam_uncert = np.append(S_beam_uncert,S_beam_uncert[jj])
+                    continue
+
+
+    # Separate the points lower than X
+    save_temp = np.array(save_temp)
+    save_logg = np.array(save_logg)
+    # save_logg_uncert = np.array(save_logg_uncert)
+    save_IR_index = np.array(save_IR_index)
+    save_this_c_factor = np.array(save_this_c_factor)
+
+    mask_low = save_this_c_factor < -0.2
+    mask_good = ~mask_low
+
+    print(save_logg[mask_low])
+    # # Scatter for 'good' c_factors
+
+    # print(save_logg_uncert_l,save_logg_uncert_h)
+
+    plt.figure(figsize=(7, 6))
+
+
+    # if use_other_c_cbar:
+    scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
+                          c=save_S_beam[mask_good], cmap=color_map, edgecolor='k', s=150, vmin=0.0,vmax=2)
+
+    plt.scatter(save_logg[mask_low] / 1.e2, np.full_like(save_logg[mask_low], -0.2),
+                c='red', edgecolor='k', s=150, marker='v')
+
+
+    # Add error bars on top of the scatter plot
+    _, caps, bars = plt.errorbar(x=save_logg[mask_good]/1.e2, y=save_this_c_factor[mask_good],
+                                          xerr=[save_logg_uncert_l[mask_good]/1.e2,save_logg_uncert_h[mask_good]/1.e2],
+                                fmt='none', ecolor='gray', capsize=4, alpha=0.5, zorder=1)
+
+    _, caps, bars = plt.errorbar(x=save_logg[mask_low]/1.e2, y=np.full_like(save_logg[mask_low], -0.2),
+                                          xerr=[save_logg_uncert_l[mask_low]/1.e2,save_logg_uncert_h[mask_low]/1.e2],
+                                fmt='none', ecolor='gray', capsize=4, alpha=0.5, zorder=1)
 
 
     # Add labels and title
-    plt.xlabel('Gravity', fontsize=14)
+    plt.xlabel('log(g)', fontsize=18)
     # plt.ylabel('Integrated Intensity Main Beam (K km/s)', fontsize=14)
-    plt.ylabel('Integrated Intensity FOV (K km/s)', fontsize=14)
+    plt.ylabel('C-factor ' + molecule, fontsize=18)
     # plt.ylabel('Peak Temperature (K)', fontsize=14)
+    cbar = plt.colorbar(scatter,cmap='gist_rainbow', location='top', orientation='horizontal', format='%.1f',fraction=0.1,pad=0.01)# fraction=0.048, pad=0.04)
 
-    plt.title(molecule, fontsize=16)
+    cbar.set_label(label=molecule + ' Integrated Intensity (K km/s) ', size=16)
     plt.grid(True, linestyle='--', alpha=0.6)
+    # cbar = plt.colorbar(scatter,cmap='gist_rainbow')
+
+
+    plt.ylim(-0.25,1.0)
+    plt.xlim(2.65,4.15)
+
+    # plt.title(molecule, fontsize=16)
+    # plt.grid(True, linestyle='--', alpha=0.6)
 
     # Show the plot
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join('Figures/stellar_vs_gas/', molecule+'_gravity_vs_integrated_intensity_FOV.png'), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/concentration/',
+                                 molecule+'_gravity_vs_c_and_integrated_intensity_'+today+'.png'),
+                    bbox_inches='tight', dpi=300)
     plt.show()
 
 
@@ -383,7 +493,7 @@ def plot_stellar_params_and_coldense(spectrum_file,map_file,molecule='HCO+',save
     # Show the plot
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join('Figures/stellar_vs_gas/', molecule+'_gravity_vs_integrated_intensity_FOV.png'), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join('Figures/concentration/', molecule+'_gravity_vs_integrated_intensity_FOV.png'), bbox_inches='tight', dpi=300)
     plt.show()
 
 
@@ -400,12 +510,18 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
     vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(spectrum_file)
 
     if molecule=='HCO+':
-        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters('concentrations_2025-06-02_10_HCO+.txt')
-        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other = read_c_factor_parameters('concentrations_2025-06-01_11_C18O.txt')
+        # star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters('concentrations_2025-06-02_10_HCO+.txt')
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma,\
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_22_HCO+.txt')
+        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other,\
+        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_2025-08-12_23_C18O.txt')
         other_molecule = 'C18O'
+
     elif molecule=='C18O':
-        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters('concentrations_2025-06-01_11_C18O.txt')
-        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other = read_c_factor_parameters('concentrations_2025-06-02_10_HCO+.txt')
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma, \
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_23_C18O.txt')
+        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other,\
+        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_2025-08-12_22_HCO+.txt')
         other_molecule = 'HCO+'
     else:
         ValueError('only two values are possible C18O or HCO+')
@@ -420,9 +536,10 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
     elif sigma_threshold==3:
         c_factor_n_sigma = c_factor_3_sigma
         c_factor_n_sigma_other = c_factor_2_sigma_other
-
     else:
-        raise ValueError("Number must be 1, 2, or 3 sigmas.")
+        c_factor_n_sigma = c_factor_gaussian
+        # raise ValueError("Number must be 1, 2, or 3 sigmas.")
+        c_factor_n_sigma_other = c_factor_gaussian_other
 
     save_name, save_temp, save_logg, save_logg_uncert_h,save_logg_uncert_l, save_IR_index, save_this_c_factor, save_other_c_factor=[],[],[],[],[],[],[],[]
 
@@ -431,13 +548,12 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
         c_factor_aux=0.0
         for jj in range(len(star_name_map)):
             if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
-                print(star_name[ii], star_name_map[jj], c_factor_n_sigma[jj])
+                print(star_name[ii], star_name_map[jj], c_factor_n_sigma[jj],logg_values[ii])
                 if math.isnan(c_factor_n_sigma[jj]) or c_factor_n_sigma[jj] == float('-inf'):
                     c_factor_aux = 0.0
                 else:
                     c_factor_aux = c_factor_n_sigma[jj]
 
-                print(c_factor_aux,type(c_factor_aux))
                 continue
         save_name = np.append(save_name, star_name[ii])
         save_temp = np.append(save_temp, Temp_values[ii])
@@ -465,18 +581,6 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
                 continue
 
         save_other_c_factor = np.append(save_other_c_factor, c_factor_aux)
-
-    print('logg values')
-    print(save_logg/1.e2)
-    print('logg uncertainties positive')
-    print(save_logg_uncert_h/1.e2)
-    print('logg uncertainties negative')
-    print(save_logg_uncert_l/1.e2)
-    print('C-factor_HCO+')
-    print(save_this_c_factor)
-    print('C-factor_C18O')
-    print(save_other_c_factor)
-    print(len(save_logg),len(save_this_c_factor),len(save_other_c_factor))
 
     # Separate the points lower than X
     save_temp = np.array(save_temp)
@@ -515,7 +619,11 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
         scatter = plt.scatter(save_logg[mask_good]/1.e2, save_this_c_factor[mask_good],
                           c=save_this_c_factor[mask_good], cmap=color_map, edgecolor='k', s=100, vmin=0.0)
 
-    plt.xlim(2.65,4.15)
+        # scatter = plt.scatter(save_temp, save_logg/1.e2,
+        #                   c=save_this_c_factor, cmap=color_map, edgecolor='k', s=100, vmin=0.0)
+        # plt.xlim(4300,2900)
+        # plt.ylim(4.00,2.70)
+    # plt.xlim(2.65,4.15)
 
 
     # # Scatter for 'low' c_factors as down arrows at c_factor=-0.3
@@ -582,7 +690,7 @@ def plot_stellar_params_and_c_factors(spectrum_file,sigma_threshold='2',molecule
     # Show the plot
     plt.tight_layout()
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', 'logg_vs_'+molecule+str(sigma_threshold)+'sigma_'+today+'.png')
+        plt.savefig(os.path.join('Figures/concentration/', 'logg_vs_'+molecule+str(sigma_threshold)+'_'+today+'.png')
                     , bbox_inches='tight', dpi=300)
     plt.show()
 
@@ -699,71 +807,124 @@ def plot_parameters(save=False):
     plt.show()
 
 
-def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity', molecule='HCO+',save=False):
-
-    T_mb, S_peak, S_area, star_name_map = read_map_parameters(map_file)
-
+def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity',sigma_threshold=2, molecule='HCO+',save=False):
 
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
-    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name=    read_parameters(filename)
-    logg_values =logg_values/100.
+    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(filename)
 
-    print(logg_uncertainty[0])
-    print(logg_uncertainty[1])
+    logg_values = logg_values/1.e2
+    T_mb, S_beam, S_beam_uncert, star_spectral_map = read_map_parameters(map_file)
+
+    S_beam = np.array(S_beam)
+
+
+
+    if molecule=='HCO+':
+        # star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters('concentrations_2025-06-02_10_HCO+.txt')
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma,\
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_22_HCO+.txt')
+        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other,\
+        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_2025-08-12_23_C18O.txt')
+        other_molecule = 'C18O'
+
+    elif molecule=='C18O':
+        star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma, \
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_23_C18O.txt')
+        star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other,\
+        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_2025-08-12_22_HCO+.txt')
+        other_molecule = 'HCO+'
+    else:
+        ValueError('only two values are possible C18O or HCO+')
+
+
+    if sigma_threshold ==1:
+        c_factor_n_sigma = c_factor_1_sigma
+        c_factor_n_sigma_other = c_factor_1_sigma_other
+    elif sigma_threshold==2:
+        c_factor_n_sigma = c_factor_2_sigma
+        c_factor_n_sigma_other = c_factor_2_sigma_other
+    elif sigma_threshold==3:
+        c_factor_n_sigma = c_factor_3_sigma
+        c_factor_n_sigma_other = c_factor_2_sigma_other
+    else:
+        c_factor_n_sigma = c_factor_gaussian
+        # raise ValueError("Number must be 1, 2, or 3 sigmas.")
+        c_factor_n_sigma_other = c_factor_gaussian_other
+
+
+    save_name, save_temp, save_logg, save_logg_uncert_h,\
+    save_logg_uncert_l, save_IR_index, save_this_c_factor, save_S_beam, save_S_beam_uncert, save_other_c_factor= [],[],[],[],[],[],[],[],[],[]
+
+    #### get the spectral parameters associated to the sources of the main molecule
+    for ii in range(len(star_name)):
+        c_factor_aux=0.0
+        for jj in range(len(star_name_map)):
+            if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
+                # print(star_name[ii], star_name_map[jj], c_factor_n_sigma[jj],logg_values[ii])
+                # print(ii)
+
+                if math.isnan(c_factor_n_sigma[jj]) or c_factor_n_sigma[jj] == float('-inf'):
+                    c_factor_aux = 0.0
+                else:
+                    c_factor_aux = c_factor_n_sigma[jj]
+
+                continue
+        save_name = np.append(save_name, star_name[ii])
+        save_temp = np.append(save_temp, Temp_values[ii])
+        save_logg = np.append(save_logg, logg_values[ii])
+        save_logg_uncert_h = np.append(save_logg_uncert_h, logg_uncertainty[0][ii])
+        save_logg_uncert_l = np.append(save_logg_uncert_l, logg_uncertainty[1][ii])
+
+        save_this_c_factor = np.append(save_this_c_factor, c_factor_aux)
+        save_IR_index = np.append(save_IR_index,ir_index_values[ii])
+
+
+    for ii in range(len(save_name)):
+        c_factor_aux=0.0
+        for jj in range(len(star_name_map_other)):
+            if are_names_approximate(save_name[ii], star_name_map_other[jj], threshold=0.9):
+                if math.isnan(c_factor_n_sigma_other[jj]) or c_factor_n_sigma_other[jj] == float('-inf'):
+                    c_factor_aux = 0.0
+                else:
+                    c_factor_aux = c_factor_n_sigma_other[jj]
+
+                # print(c_factor_aux,type(c_factor_aux))
+                continue
+
+        save_other_c_factor = np.append(save_other_c_factor, c_factor_aux)
+
+
+    #### get the integrated intensities associated with the sources
+    for ii in range(len(save_name)):
+
+        if save_this_c_factor[ii] == 0.0:
+            save_S_beam = np.append(save_S_beam,0)
+            print(ii, save_name[ii])
+
+        else:
+            for jj in range(len(star_spectral_map)):
+
+                if are_names_approximate(save_name[ii], star_spectral_map[jj], threshold=0.9):
+
+                    save_S_beam = np.append(save_S_beam,S_beam[jj])
+                    save_S_beam_uncert = np.append(S_beam_uncert,S_beam_uncert[jj])
+                    continue
+
+
     ir_index, ir_corrected_values, star_name_ir_index = read_ir_index_parameters(ir_file)
+
+
 
     protostars_parameter =[]
     not_protostar_parameter=[]
-    counted_source = []
-    protostars_parameter_uncertainty =[]
-    not_protostars_parameter_uncertainty =[]
+    # protostars_parameter_uncertainty =[]
+    # not_protostars_parameter_uncertainty =[]
 
-    if parameter.lower() == 'gravity':
-        for ii in range(len(star_name)):
-            # print('All sources: ',star_name[ii])
-            for jj in range(len(star_name_map)):
-                if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9):
-                    # print(ii)
-                    counted_source.append(ii)
-                    if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3 and C18O_data[ii]>0.2:
-
-                        protostars_parameter.append(logg_values[ii])
-                        # print(logg_uncertainty[ii])
-                        average_uncertainty = (logg_uncertainty[0][ii] + logg_uncertainty[1][ii])/2
-                        protostars_parameter_uncertainty.append(average_uncertainty)
-                        # print('Detections',star_name[ii])
-
-                    else:
-                        not_protostar_parameter.append(logg_values[ii])
-                        average_uncertainty = (logg_uncertainty[0][ii] + logg_uncertainty[1][ii])/2
-                        not_protostars_parameter_uncertainty.append(average_uncertainty)
-
-                        # print('NO detections',star_name[ii])
-
-            if ii not in counted_source:
-                not_protostar_parameter.append(logg_values[ii])
-                average_uncertainty = (logg_uncertainty[0][ii] + logg_uncertainty[1][ii]) / 2
-                not_protostars_parameter_uncertainty.append(average_uncertainty)
-
-    elif parameter.lower() == 'ir_index':
-
-        for ii in range(len(star_name)):
-            # print('All sources: ',star_name[ii])
-            for jj in range(len(star_name_map)):
-                for zz in range(len(star_name_ir_index)):
-                    if are_names_approximate(star_name[ii], star_name_map[jj], threshold=0.9) & are_names_approximate(star_name[ii], star_name_ir_index[zz], threshold=0.9):
-
-                        if HCO_data[ii]>0.2 and not math.isnan(HCO_data[ii]) and S_peak[jj]>0.3  and C18O_data[ii]>0.2:
-
-                            protostars_parameter.append(ir_corrected_values[zz])
-                            # protostars_parameter.append(ir_index[jj])
-
-                            # print('Detections',star_name[ii])
-
-                        else:
-                            not_protostar_parameter.append(ir_corrected_values[zz])
-                            # not_protostar_parameter.append(ir_index[jj])
-                            # print('NOOOOO detections',star_name[ii])
+    for ii in range(len(save_name)):
+        if save_this_c_factor[ii]>0.2 and save_S_beam[ii]>0.3 and save_other_c_factor[ii]>0.2:
+            protostars_parameter.append(save_logg[ii])
+        else:
+            not_protostar_parameter.append(save_logg[ii])
 
 
     res= stats.ttest_ind(protostars_parameter, not_protostar_parameter, equal_var=False)
@@ -776,6 +937,10 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
     mean_val_2 = round(np.nanmean(not_protostar_parameter), 2)
     std_val_2 = round(np.nanstd(not_protostar_parameter), 2)
 
+
+
+    print(len(protostars_parameter))
+    print(len(not_protostar_parameter))
 
     # plt.title(molecule)
     if parameter.lower() == 'gravity':
@@ -792,8 +957,8 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
         print('mean, median, and std uncertainty of the gravities',
               np.nanmean(logg_uncertainty),np.nanmedian(logg_uncertainty),np.nanstd(np.nanmean(logg_uncertainty)))
 
-        print('mean, median of envelope', np.nanmean(protostars_parameter_uncertainty), np.nanmedian(protostars_parameter_uncertainty))
-        print('mean, median of non-envelope', np.nanmean(not_protostars_parameter_uncertainty), np.nanmedian(not_protostars_parameter_uncertainty))
+        # print('mean, median of envelope', np.nanmean(protostars_parameter_uncertainty), np.nanmedian(protostars_parameter_uncertainty))
+        # print('mean, median of non-envelope', np.nanmean(not_protostars_parameter_uncertainty), np.nanmedian(not_protostars_parameter_uncertainty))
 
         # plt.legend(loc='upper left')
 
@@ -804,10 +969,10 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
         # plt.legend(loc='upper right')
 
     # plt.hist(not_protostar_parameter,bins,alpha=0.7, label='non-detections', histtype='step',edgecolor="C1",lw=2)
-    plt.hist(not_protostar_parameter,bins,alpha=0.5, label='non-detections', edgecolor="black")
+    plt.hist(not_protostar_parameter,bins,alpha=0.5, label='dissipated envelope', edgecolor="black")
 
     # plt.hist(protostars_parameter,bins,alpha=0.7, label='detections', edgecolor="C0", histtype='step',lw=2)
-    plt.hist(protostars_parameter,bins,alpha=0.5, label='detections', edgecolor="black")
+    plt.hist(protostars_parameter,bins,alpha=0.5, label='detected envelope', edgecolor="black")
 
     plt.xlabel(x_label,size=14)
 
@@ -818,7 +983,7 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
 
     plt.legend()
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule + 'HCO+_Hist_'+ today +'.png'),
+        plt.savefig(os.path.join('Figures/concentration/', molecule + '_Hist_'+ today +'.png'),
                     bbox_inches='tight', dpi=300)
     plt.show()
 
@@ -902,35 +1067,37 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'WLY2-42'
-    molecule ='HCO+'
-    # molecule ='C18O'
+    source_name = 'IRAS04181+2655M'
+    # molecule ='HCO+'
+    molecule ='C18O'
 
     # calculate_concentration_factor(source_name, molecule, n_sigma=1, gaussian_fit=True, plot=True, use_skycoord=True)
-    #
-    save_concentration_factors_to_file(folder_fits='sdf_and_fits',
-                                       molecule=molecule,
-                                       save_filename='concentrations_'+ today + '_' + hour_now + '_' + molecule+'.txt')
+
+    # save_concentration_factors_to_file(folder_fits='sdf_and_fits',
+    #                                    molecule=molecule,
+    #                                    save_filename='concentrations_'+ today + '_' + hour_now + '_' + molecule+'.txt')
 
 
     # plot_parameters(save=True)
 
-    # plot_stellar_params_and_c_factors(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
+    # plot_stellar_params_and_c_factors(spectrum_file='text_files/Class_I_for-JCMT-plots.txt',
     #                                   sigma_threshold=2,
-    #                                   molecule=molecule, save=True, color_map='gist_rainbow', use_other_c_cbar=True)
+    #                                   # sigma_threshold='gaussian',
+    #                                   molecule=molecule, save=False, color_map='gist_rainbow', use_other_c_cbar=True)
 
     # plot_stellar_params_and_coldense(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
     #                                 map_file='text_files/envelope_mass_2025-05-21_22_C18O.txt',molecule=molecule,save=False)
 
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots.txt', parameter='hco',
-    #                                molecule=molecule,save=True)
+    #                                molecule=molecule,save=False)
 
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
     #                                molecule=molecule,save=False)
 
     # make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
     #                              , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
-    #                              parameter='gravity',molecule='HCO+', save=False)
+    #                              parameter='gravity',molecule=molecule, save=True)
 
-    # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt',
-    #                                 map_file='spectrum_parameters_'+molecule+'.txt',molecule=molecule,save=True)
+    plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots.txt',
+                                    spectral_map_file='spectrum_parameters_'+molecule+'.txt',
+                                    sigma_threshold=2,molecule=molecule, color_map='gist_rainbow',save=True)

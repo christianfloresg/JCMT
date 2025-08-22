@@ -1,9 +1,0 @@
-## SourceMame       c-factor_1sigma     c-factor_2sigma     c-factor_3sigma     c-factor_gaussian   
-DG-Tau              0.2866              -0.1034             nan                 0.8709              
-DoAr25              0.1869              -0.0807             -0.3475             0.7788              
-DoAr43              -2.4275             -3.4395             -4.2751             0.8758              
-EC92                0.6736              0.6611              0.6415              0.4307              
-Elia32              0.317               0.3078              0.3034              0.0285              
-Elia33              0.4456              0.4397              0.4352              0.7261              
-FPTau               nan                 nan                 nan                 nan                 
-GV_Tau              0.8003              0.7773              0.7429              0.7415              
