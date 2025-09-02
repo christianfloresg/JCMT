@@ -268,7 +268,7 @@ def read_ir_index_parameters(filename):
 
     star_name = our_data['col1']#our_data[:, 0]
     ir_index = our_data['col2']#our_data[:, 4]
-    corrected_ir_index = our_data['col3']#our_data[:, 9]
+    corrected_ir_index = our_data['col4']#our_data[:, 9]
 
 
     return ir_index, corrected_ir_index, star_name
@@ -810,7 +810,10 @@ def plot_parameters(save=False):
 def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity',sigma_threshold=2, molecule='HCO+',save=False):
 
     Temp_values, temp_uncertainty, logg_values, logg_uncertainty, bfield_values, bfield_uncertainty, \
-    vsini_values, vsini_uncertainty, ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(filename)
+    vsini_values, vsini_uncertainty, old_ir_index_values, HCO_data, C18O_data, star_name =  read_parameters(filename)
+
+    ir_index_values, ir_corrected_values, star_name_ir_index = read_ir_index_parameters(ir_file)
+
 
     logg_values = logg_values/1.e2
     T_mb, S_beam, S_beam_uncert, star_spectral_map = read_map_parameters(map_file)
@@ -853,7 +856,7 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
 
 
     save_name, save_temp, save_logg, save_logg_uncert_h,\
-    save_logg_uncert_l, save_IR_index, save_this_c_factor, save_S_beam, save_S_beam_uncert, save_other_c_factor= [],[],[],[],[],[],[],[],[],[]
+    save_logg_uncert_l, save_corrected_IR_index, save_IR_index, save_this_c_factor, save_S_beam, save_S_beam_uncert, save_other_c_factor= [],[],[],[],[],[],[],[],[],[],[]
 
     #### get the spectral parameters associated to the sources of the main molecule
     for ii in range(len(star_name)):
@@ -876,8 +879,8 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
         save_logg_uncert_l = np.append(save_logg_uncert_l, logg_uncertainty[1][ii])
 
         save_this_c_factor = np.append(save_this_c_factor, c_factor_aux)
-        save_IR_index = np.append(save_IR_index,ir_index_values[ii])
-
+        # save_IR_index = np.append(save_IR_index,ir_index_values[ii])
+        # save_corrected_IR_index = np.append(save_corrected_IR_index,ir_corrected_values)
 
     for ii in range(len(save_name)):
         c_factor_aux=0.0
@@ -911,25 +914,95 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
                     continue
 
 
-    ir_index, ir_corrected_values, star_name_ir_index = read_ir_index_parameters(ir_file)
-
-
-
     protostars_parameter =[]
     not_protostar_parameter=[]
     # protostars_parameter_uncertainty =[]
     # not_protostars_parameter_uncertainty =[]
 
-    for ii in range(len(save_name)):
-        if save_this_c_factor[ii]>0.2 and save_S_beam[ii]>0.3 and save_other_c_factor[ii]>0.2:
-            protostars_parameter.append(save_logg[ii])
-        else:
-            not_protostar_parameter.append(save_logg[ii])
+    if parameter.lower() == 'gravity':
+        for ii in range(len(save_name)):
+            if save_this_c_factor[ii]>0.2 and save_S_beam[ii]>0.3 and save_other_c_factor[ii]>0.2:
+                protostars_parameter.append(save_logg[ii])
+            else:
+                not_protostar_parameter.append(save_logg[ii])
+
+    elif parameter.lower() == 'temperature':
+        for ii in range(len(save_name)):
+            if save_this_c_factor[ii]>0.2 and save_S_beam[ii]>0.3 and save_other_c_factor[ii]>0.2:
+                protostars_parameter.append(save_temp[ii])
+            else:
+                not_protostar_parameter.append(save_temp[ii])
+
+        print('n_sources envelope:',len(protostars_parameter))
+        print('n_source non_envelope:',len(not_protostar_parameter))
+
+        print('min and max envelope:', np.nanmin(protostars_parameter), np.nanmax(protostars_parameter))
+        print('min and max non_envelope:', np.nanmin(ot_protostar_parameter), np.nanmax(ot_protostar_parameter))
+
+    save_name_ir_index, save_this_c_factor_ir_index, save_other_c_factor_ir_index,\
+    save_S_beam_ir_index,save_IR_index, save_corrected_IR_index , save_logg_ir_index, save_temp_ir_index = [], [], [], [], [],[],[],[]
+
+    #### get the spectral parameters associated to the spectral indices
+    counter = 0
+    for ii in range(len(star_name_ir_index)):
+        for jj in range(len(save_name)):
+            if are_names_approximate(star_name_ir_index[ii], save_name[jj], threshold=0.9):
+                counter=counter+1
+
+                # print(counter, star_name_ir_index[ii], save_name[jj],ir_corrected_values[ii],save_this_c_factor[jj] )
+                # print(counter)
+
+                save_this_c_factor_ir_index = np.append(save_this_c_factor_ir_index,save_this_c_factor[jj])
+                save_other_c_factor_ir_index = np.append(save_other_c_factor_ir_index,save_other_c_factor[jj])
+                save_S_beam_ir_index = np.append(save_S_beam_ir_index,save_S_beam[jj])
+                save_logg_ir_index = np.append(save_logg_ir_index, save_logg[jj])
+                save_temp_ir_index = np.append(save_temp_ir_index,save_temp[jj])
+                save_IR_index = np.append(save_IR_index, ir_index_values[ii])
+                save_corrected_IR_index = np.append(save_corrected_IR_index, ir_corrected_values[ii])
+                save_name_ir_index = np.append(save_name_ir_index, star_name_ir_index[ii])
 
 
-    res= stats.ttest_ind(protostars_parameter, not_protostar_parameter, equal_var=False)
-    print(res)
 
+
+    if parameter.lower() == 'ir_index':
+        for ii in range(len(save_IR_index)):
+            if save_this_c_factor_ir_index[ii]>0.2 and save_S_beam_ir_index[ii]>0.3 and save_other_c_factor_ir_index[ii]>0.2:
+                protostars_parameter.append(save_IR_index[ii])
+                print('envelope ',save_name_ir_index[ii] , save_IR_index[ii] , round(save_logg_ir_index[ii],2), save_temp_ir_index[ii])
+
+            else:
+                not_protostar_parameter.append(save_IR_index[ii])
+                print('non-envelope ',save_name_ir_index[ii] ,save_IR_index[ii] , round(save_logg_ir_index[ii],2), save_temp_ir_index[ii])
+
+        print('n_sources envelope:', len(protostars_parameter))
+        print('n_source non_envelope:', len(not_protostar_parameter))
+
+        print('min and max envelope:', np.nanmin(protostars_parameter), np.nanmax(protostars_parameter))
+        print('min and max non_envelope:', np.nanmin(not_protostar_parameter), np.nanmax(not_protostar_parameter))
+
+    elif parameter.lower() == 'corrected_ir_index':
+        for ii in range(len(save_IR_index)):
+            if save_this_c_factor_ir_index[ii]>0.2 and save_S_beam_ir_index[ii]>0.3 and save_other_c_factor_ir_index[ii]>0.2:
+                protostars_parameter.append(save_corrected_IR_index[ii])
+                print('envelope ',save_name_ir_index[ii] ,save_corrected_IR_index[ii])
+            else:
+                not_protostar_parameter.append(save_corrected_IR_index[ii])
+
+
+        print('n_sources envelope:', len(protostars_parameter))
+        print('n_source non_envelope:', len(not_protostar_parameter))
+
+        print('min and max envelope:', np.nanmin(protostars_parameter), np.nanmax(protostars_parameter))
+        print('min and max non_envelope:', np.nanmin(not_protostar_parameter), np.nanmax(not_protostar_parameter))
+
+    res_t_test = stats.ttest_ind(protostars_parameter, not_protostar_parameter, equal_var=False)
+    res_ks_test = stats.kstest(protostars_parameter, not_protostar_parameter)
+
+    print('T test \n'*5)
+    print(res_t_test)
+
+    print('KS test \n'*5)
+    print(res_ks_test)
 
     mean_val_1 = round(np.nanmean(protostars_parameter), 2)
     std_val_1 = round(np.nanstd(protostars_parameter), 2)
@@ -962,11 +1035,47 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
 
         # plt.legend(loc='upper left')
 
+    elif parameter.lower() == 'temperature':
+        x_label ='Temperature'
+        bins = np.arange(3000, 4400, 100)
+        x_leg, y_leg = 3000, 5
+
+        print('mean temperature envelope', mean_val_1)
+        print('std error mean temperature envelope', std_val_1/(len(protostars_parameter))**0.5)
+
+        print('mean temperature non-envelope', mean_val_2)
+        print('std error mean temperature non-envelope', std_val_2/(len(not_protostar_parameter))**0.5)
+
+        print('mean, median, and std uncertainty of the temperature',
+              np.nanmean(logg_uncertainty), np.nanmedian(logg_uncertainty), np.nanstd(np.nanmean(logg_uncertainty)))
+
     elif parameter.lower() == 'ir_index':
-        x_label ='Corrected IR index'
-        bins = np.arange(-1.25, 1.25, 0.25)
+        x_label ='IR index'
+        bins = np.arange(-1.3, 1.3, 0.25)
         x_leg, y_leg = 0.1, 4
         # plt.legend(loc='upper right')
+        print('meanir_index envelope', mean_val_1)
+        print('std error mean gravity envelope', std_val_1/(len(protostars_parameter))**0.5)
+
+        print('mean ir_index non-envelope', mean_val_2)
+        print('std error mean gravity non-envelope', std_val_2/(len(not_protostar_parameter))**0.5)
+
+        print('mean, median, and std uncertainty of the ir_index',
+              np.nanmean(logg_uncertainty), np.nanmedian(logg_uncertainty), np.nanstd(np.nanmean(logg_uncertainty)))
+
+    elif parameter.lower() == 'corrected_ir_index':
+        x_label ='Corrected IR index'
+        bins = np.arange(-1.3, 1.3, 0.25)
+        x_leg, y_leg = 0.3, 4
+        # plt.legend(loc='upper right')
+        print('mean Corrected IR index envelope', mean_val_1)
+        print('std error mean Corrected IR index envelope', std_val_1/(len(protostars_parameter))**0.5)
+
+        print('mean Corrected IR index non-envelope', mean_val_2)
+        print('std error mean Corrected IR index non-envelope', std_val_2/(len(not_protostar_parameter))**0.5)
+
+        print('mean, median, and std uncertainty of the Corrected IR index',
+              np.nanmean(logg_uncertainty), np.nanmedian(logg_uncertainty), np.nanstd(np.nanmean(logg_uncertainty)))
 
     # plt.hist(not_protostar_parameter,bins,alpha=0.7, label='non-detections', histtype='step',edgecolor="C1",lw=2)
     plt.hist(not_protostar_parameter,bins,alpha=0.5, label='dissipated envelope', edgecolor="black")
@@ -983,7 +1092,7 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
 
     plt.legend()
     if save:
-        plt.savefig(os.path.join('Figures/concentration/', molecule + '_Hist_'+ today +'.png'),
+        plt.savefig(os.path.join('Figures/concentration/', molecule + 'alpha_corrected_ir_index_Mike_Hist_'+ today +'.png'),
                     bbox_inches='tight', dpi=300)
     plt.show()
 
@@ -1068,8 +1177,8 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 if __name__ == "__main__":
 
     source_name = 'IRAS04181+2655M'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    molecule ='HCO+'
+    # molecule ='C18O'
 
     # calculate_concentration_factor(source_name, molecule, n_sigma=1, gaussian_fit=True, plot=True, use_skycoord=True)
 
@@ -1094,10 +1203,10 @@ if __name__ == "__main__":
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
     #                                molecule=molecule,save=False)
 
-    # make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
-    #                              , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_new.txt',
-    #                              parameter='gravity',molecule=molecule, save=True)
+    make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
+                                 , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_2025-07-27.txt',
+                                 parameter='ir_index',molecule=molecule, save=False)
 
-    plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots.txt',
-                                    spectral_map_file='spectrum_parameters_'+molecule+'.txt',
-                                    sigma_threshold=2,molecule=molecule, color_map='gist_rainbow',save=True)
+    # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots.txt',
+    #                                 spectral_map_file='spectrum_parameters_'+molecule+'.txt',
+    #                                 sigma_threshold=2,molecule=molecule, color_map='gist_rainbow',save=True)
