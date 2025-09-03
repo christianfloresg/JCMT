@@ -101,8 +101,8 @@ ax2.grid(alpha=GRID_ALPHA)
 cbar = fig2.colorbar(contour, ax=ax2)
 cbar.set_label("P(envelope)")
 fig2.tight_layout()
-fig2.savefig("/mnt/data/fig_logg_alpha_boundary.pdf")
-fig2.savefig("/mnt/data/fig_logg_alpha_boundary.png", dpi=SAVE_DPI)
+fig2.savefig("Figures/alpha_ang_gravity/fig_logg_alpha_boundary.pdf")
+fig2.savefig("Figures/alpha_ang_gravity/fig_logg_alpha_boundary.png", dpi=SAVE_DPI)
 
 # ---------------------------
 # ROC calculations
@@ -133,7 +133,7 @@ ax3.set_ylabel("True Positive Rate")
 ax3.legend(loc="lower right")
 ax3.grid(alpha=GRID_ALPHA)
 fig3.tight_layout()
-fig3.savefig("/mnt/data/fig_roc.pdf")
-fig3.savefig("/mnt/data/fig_roc.png", dpi=SAVE_DPI)
+fig3.savefig("Figures/alpha_ang_gravity/fig_roc.pdf")
+fig3.savefig("Figures/alpha_ang_gravity/fig_roc.png", dpi=SAVE_DPI)
 
-auc_logg, auc_alpha, auc_comb
+print(auc_logg, auc_alpha, auc_comb)
