@@ -15,6 +15,7 @@ from datetime import date,datetime
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from scipy.ndimage import rotate
 from astropy.stats import sigma_clip
+from astropy.stats import mad_std, sigma_clip
 
 import os
 from astropy.modeling import models, fitting
@@ -755,7 +756,121 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
     return area_of_significant_emission, total_emission
 
 
-def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics=False):
+
+def evaluate_gauss2d_fit(
+    data: np.ndarray,
+    fit,                        # astropy.modeling.models.Gaussian2D after fitting
+    mask: np.ndarray | None = None,
+) -> dict:
+    """
+    Build model on the data grid, compute residuals + simple quality metrics.
+    Returns a dict with model, residuals, and numbers.
+    """
+    yy, xx = np.mgrid[:data.shape[0], :data.shape[1]]
+    model = fit(xx, yy)
+
+    if mask is None:
+        mask = ~np.isfinite(data)
+    valid = (~mask) & np.isfinite(data) & np.isfinite(model)
+
+    resid = data - model
+    resid_rms = float(mad_std(resid[valid]))  # robust RMS
+
+    # degrees of freedom (N - number of free params)
+    free_params = [
+        p for p in fit.param_names
+        if not getattr(getattr(fit, p), "fixed", False)
+        and getattr(fit, p).tied is None
+    ]
+    N = int(valid.sum())
+    dof = max(N - len(free_params), 1)
+
+    # simple reduced-chi^2 (assumes homoskedastic noise ~ resid_rms)
+    denom = resid_rms if resid_rms > 0 else 1.0
+    red_chi2 = float(np.nansum((resid[valid] / denom) ** 2) / dof)
+
+    # convenient extras
+    x_fit = float(fit.x_mean.value)
+    y_fit = float(fit.y_mean.value)
+    sx = float(fit.x_stddev.value)
+    sy = float(fit.y_stddev.value)
+    theta_deg = float(np.degrees(float(fit.theta.value)))
+    fwhm_x = 2.355 * sx
+    fwhm_y = 2.355 * sy
+
+    return {
+        "model": model,
+        "residuals": resid,
+        "valid_mask": valid,
+        "resid_rms": resid_rms,
+        "reduced_chi2": red_chi2,
+        "center": (x_fit, y_fit),
+        "sigma": (sx, sy),
+        "fwhm": (fwhm_x, fwhm_y),
+        "theta_deg": theta_deg,
+        "N": N,
+        "dof": dof,
+    }
+
+def plot_fit_diagnostics(
+    data: np.ndarray,
+    model: np.ndarray,
+    residuals: np.ndarray,
+    valid_mask: np.ndarray | None = None,
+    fit=None,
+    wcs=None,                   # optional astropy WCS for RA/Dec axes
+):
+    """
+    2×2 panel: data, model, residual map, residual histogram.
+    If WCS is provided, RA/Dec axes are used for the 3 images.
+    """
+    # common stretch for data/model
+    if valid_mask is None:
+        valid_mask = np.isfinite(data) & np.isfinite(model)
+    vmin, vmax = np.nanpercentile(data[valid_mask], [1, 99])
+    norm = simple_norm(data[valid_mask], "linear", min_cut=vmin, max_cut=vmax)
+    rmax = np.nanpercentile(np.abs(residuals[valid_mask]), 99)
+
+    subplot_kw = {"projection": wcs} if wcs is not None else {}
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9), subplot_kw=subplot_kw if wcs is not None else None)
+    (ax_data, ax_model), (ax_resid, ax_hist) = axes
+
+    im0 = ax_data.imshow(data, origin="lower", norm=norm)
+    ax_data.set_title("Data")
+    plt.colorbar(im0, ax=ax_data, fraction=0.046, pad=0.04)
+
+    im1 = ax_model.imshow(model, origin="lower", norm=norm)
+    ax_model.set_title("Best-fit Model")
+    plt.colorbar(im1, ax=ax_model, fraction=0.046, pad=0.04)
+
+    im2 = ax_resid.imshow(residuals, origin="lower", vmin=-rmax, vmax=+rmax)
+    ax_resid.set_title("Residuals (data − model)")
+    plt.colorbar(im2, ax=ax_resid, fraction=0.046, pad=0.04)
+
+    flat_resid = sigma_clip(residuals[valid_mask], sigma=5, masked=False).ravel()
+    ax_hist.hist(flat_resid, bins=50, histtype="step")
+    ax_hist.set_title("Residual Histogram")
+    ax_hist.set_xlabel("Residual")
+    ax_hist.set_ylabel("Count")
+
+    # annotate & optional contours/center
+    if fit is not None:
+        x_fit, y_fit = float(fit.x_mean.value), float(fit.y_mean.value)
+        try:
+            levels = np.linspace(np.nanmin(model[valid_mask]), np.nanmax(model[valid_mask]), 6)[1:-1]
+            ax_data.contour(model, levels=levels, colors="w", linewidths=0.8)
+        except Exception:
+            pass
+        ax_data.plot(x_fit, y_fit, marker="x", ms=6, mew=1.5, color="w")
+
+    for ax in (ax_data, ax_model, ax_resid):
+        ax.set_xlabel("x [pix]" if wcs is None else "RA")
+        ax.set_ylabel("y [pix]" if wcs is None else "Dec")
+
+    plt.tight_layout()
+    plt.show()
+
+def area_and_emission_via_gaussian(source_name, molecule, save_fig=False, diagnostics=False):
     """
     Fit a 2D Gaussian to the moment-0 map with the center allowed to move up to ±5 arcsec
     from the near-IR source coordinates. Define Robs from the fitted FWHM_circ (see note below).
@@ -806,7 +921,13 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
         aperture_radius = 7.635
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
+
+    '''
+    The factor of two is because  we give the radius or half of the FWHM, which is about 15'' in diameter.
+    pi * FWHM^2 / (4 ln2)
+    '''
     pix_per_beam = ((2 * aperture_radius) ** 2 * np.pi / (4.0 * np.log(2.0))) / pixel_area_arcsec2
+
     if not np.isfinite(pix_per_beam) or pix_per_beam <= 0:
         raise ValueError(f"Invalid pix_per_beam: {pix_per_beam}")
 
@@ -839,7 +960,7 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
                                theta=theta0)
 
     # CHANGED: allow center to move, with bounds of ±5 arcsec (per axis), clipped to image
-    max_shift_arcsec = 3.0
+    max_shift_arcsec = 1.0
     dx_pix = max_shift_arcsec / pixscale_x if pixscale_x > 0 else 0.0
     dy_pix = max_shift_arcsec / pixscale_y if pixscale_y > 0 else 0.0
 
@@ -864,19 +985,46 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
     fitter = fitting.LevMarLSQFitter()
     fit = fitter(g_init, xx[~fit_mask], yy[~fit_mask], data[~fit_mask])
 
+    # qa = evaluate_gauss2d_fit(data, fit, mask=fit_mask)
+    #
+    # # quick numbers for logs
+    # print(
+    #     f"RMS={qa['resid_rms']:.3g}  "
+    #     f"chi2_red≈{qa['reduced_chi2']:.2f}  "
+    #     f"center=({qa['center'][0]:.2f}, {qa['center'][1]:.2f})  "
+    #     f"FWHM=({qa['fwhm'][0]:.2f}, {qa['fwhm'][1]:.2f}) px"
+    # )
+    #
+    # # plots (use your celestial WCS if available)
+    # plot_fit_diagnostics(
+    #     data=data,
+    #     model=qa["model"],
+    #     residuals=qa["residuals"],
+    #     valid_mask=qa["valid_mask"],
+    #     fit=fit,
+    #     wcs=None  # or data_cube.wcs.celestial
+    # )
+
     # Use fitted center from now on
     x_fit = float(fit.x_mean.value)
     y_fit = float(fit.y_mean.value)
 
     # ---------- FWHM & Robs ----------
+    ### Here the standard dev (sigma) of the 2D gaussian is transformed into a FWHM.
     k = 2.0 * np.sqrt(2.0 * np.log(2.0))
     FWHM_x_arcsec = k * float(fit.x_stddev.value) * pixscale_x
     FWHM_y_arcsec = k * float(fit.y_stddev.value) * pixscale_y
     FWHM_circ_arcsec = float(np.sqrt(FWHM_x_arcsec * FWHM_y_arcsec))
 
-    # Choose ONE: half-max radius (recommended) or your current "full FWHM as radius"
     # Robs_arcsec = 0.5 * FWHM_circ_arcsec
-    Robs_arcsec = FWHM_circ_arcsec  # keep your current choice unless you change your convention
+    Robs_arcsec = FWHM_circ_arcsec
+    # This is effectively the "diameter" of the Gaussian.
+    ## This is used based on the definition of the Carney+2016,
+    ## where the effective radius is set equal to the FHWM of the Gaussian.
+
+    print('#'*19)
+    print('Robs_arcsec : ',Robs_arcsec)
+    print('#'*19)
 
     # Robs_arcsec = 35
     # radius sanity clamp
@@ -888,7 +1036,9 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
         Robs_arcsec = max_reasonable
         rob_clamped = True
 
-    area_arcsec2 = float(np.pi * (Robs_arcsec ** 2))
+    area_arcsec2 = float(np.pi * Robs_arcsec ** 2 )#/ (4.0 * np.log(2.0)))
+
+
 
     # ---------- robust emission inside Robs (centered on the FITTED center) ----------
     if not np.isfinite(pixscale_x) or pixscale_x == 0:
@@ -899,7 +1049,8 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
     total_emission = 0.0 if n_finite == 0 else float(sum_mom0_inside / pix_per_beam)
 
     # ---------- optional plotting ----------
-    if plot:
+
+    if save_fig:
         ny, nx = data.shape
         model_img = fit(xx, yy)
         residuals = data - model_img
@@ -907,7 +1058,7 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
         vmin = np.nanpercentile(data, 5)
         vmax = np.nanpercentile(data, 99)
 
-        fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+        fig, axes = plt.subplots(1, 3, figsize=(13, 4), subplot_kw={'projection': data_cube.wcs.celestial})
         im0 = axes[0].imshow(data, origin='lower', cmap='inferno',
                              norm=simple_norm(data, 'linear', vmin=vmin, vmax=vmax))
         # mark NIR center and fitted center
@@ -934,12 +1085,14 @@ def area_and_emission_via_gaussian(source_name, molecule, plot=True, diagnostics
         ell = EllipticalAperture((x_fit, y_fit), a=a_pix, b=b_pix, theta=float(fit.theta.value))
         circ = CircularAperture((x_fit, y_fit), r=Robs_pix)
         for ax in (axes[0], axes[1]):
-            ell.plot(ax=ax, color='lime', lw=1.8, label='FWHM ellipse (half-max)')
-            circ.plot(ax=ax, color='deepskyblue', lw=1.6, label='Robs circle = ' + str(round(Robs_arcsec,1)) + '″')
+            # ell.plot(ax=ax, color='lime', lw=1.8, label='FWHM ellipse (half-max)')
+            circ.plot(ax=ax, color='deepskyblue', lw=1.6, label='FWHM Gaussian = ' + str(round(Robs_arcsec,1)) + '″')
             ax.legend(loc='upper right', fontsize=8)
 
         plt.tight_layout()
-        plt.show()
+        plt.savefig(os.path.join('Figures/gaussian_area/',
+                                 source_name+'_'+molecule+'_'+'_max_shift_'+str(max_shift_arcsec)+'_'+today+'.png'), bbox_inches='tight',dpi=300)
+        # plt.show()
 
     # ---------- diagnostics ----------
     if diagnostics:
@@ -1376,21 +1529,21 @@ def mass_measurement_from_molecular_lines(source_name, molecule,distance_pc):
 if __name__ == "__main__":
 
     # source_name = 'EC92'
-    source_name = 'SR24'
-    # molecule ='HCO+'
-    molecule ='C18O'
+    source_name = 'IRAS05379-0758'
+    molecule ='HCO+'
+    # molecule ='C18O'
     # distance = 130
     ## Step 0
     # retrieve_and_write_spectral_properties(source_name, molecule, noskycoord=False)
 
     ### Step 1 creates a plot of the spectrum
-    # plot_spectrum(source_name, molecule,type='central',save=True)
+    plot_spectrum(source_name, molecule,type='central',save=True)
     # plot_spectrum(source_name, molecule,type='fov',save=False)
 
     ### Step 3
     ### Plot the maps
     # area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=1)
-    plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True,percentile_outlier=99.3)
+    # plot_moment_zero_map(source_name,molecule,save=True,use_sky_coord_object=True,plot=True,percentile_outlier=99.3)
     # plot_moment_eight_map(source_name,molecule,save=False)
 
     #### Mass produce moment maps

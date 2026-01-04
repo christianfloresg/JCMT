@@ -61,7 +61,7 @@ def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoor
     peak_integrated_emission = peak_integrated_emission_from_map(source_name, molecule, use_skycoord=use_skycoord) ### This one requires object information.
 
     if gaussian_fit:
-        area, integrated_emission = area_and_emission_via_gaussian(source_name, molecule, plot=plot, diagnostics=True)
+        area, integrated_emission = area_and_emission_via_gaussian(source_name, molecule, save_fig=plot, diagnostics=True)
 
     else:
         area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=plot)
@@ -69,6 +69,9 @@ def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoor
 
     concentration = 1 - beam_size / area * integrated_emission / peak_integrated_emission
     rounded_concentration = round(concentration,3)
+    print('beam_size',beam_size)
+    print('peak_integrated_emission',peak_integrated_emission)
+    print('area, integrated_emission',area, integrated_emission)
     print(f"For {source_name}, the concentration factor is {rounded_concentration}")
     return concentration
 
@@ -139,7 +142,7 @@ def save_concentration_factors_to_file(folder_fits, molecule, save_filename):
             concentration_3sigma = round(calculate_concentration_factor(sources, molecule,
                                                                         n_sigma=3, plot=False, gaussian_fit=False),4)
             concentration_gaussian = round(calculate_concentration_factor(sources, molecule,
-                                                                          plot=False, gaussian_fit=True),4)
+                                                                          plot=True, gaussian_fit=True),4)
 
             new_values = [sources, concentration_1sigma,concentration_2sigma, concentration_3sigma,concentration_gaussian]
 
@@ -821,20 +824,19 @@ def make_histogram_several_files(filename, map_file, ir_file, parameter='gravity
     S_beam = np.array(S_beam)
 
 
-
     if molecule=='HCO+':
         # star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma = read_c_factor_parameters('concentrations_2025-06-02_10_HCO+.txt')
         star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma,\
-        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_22_HCO+.txt')
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_5arsrc_max_new_rad_2025-10-31_12_HCO+.txt')
         star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other,\
-        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_2025-08-12_23_C18O.txt')
+        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_5arsrc_max_new_rad_2025-10-31_13_C18O.txt')
         other_molecule = 'C18O'
 
     elif molecule=='C18O':
         star_name_map, c_factor_1_sigma, c_factor_2_sigma, c_factor_3_sigma, \
-        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_2025-08-12_23_C18O.txt')
+        c_factor_gaussian = read_c_factor_parameters('text_files/concentrations_5arsrc_max_new_rad_2025-10-31_13_C18O.txt')
         star_name_map_other, c_factor_1_sigma_other, c_factor_2_sigma_other, c_factor_3_sigma_other,\
-        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_2025-08-12_22_HCO+.txt')
+        c_factor_gaussian_other = read_c_factor_parameters('text_files/concentrations_5arsrc_max_new_rad_2025-10-31_12_HCO+.txt')
         other_molecule = 'HCO+'
     else:
         ValueError('only two values are possible C18O or HCO+')
@@ -1176,7 +1178,7 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'IRAS04181+2655M'
+    source_name = 'IRAS04181+2655S'
     molecule ='HCO+'
     # molecule ='C18O'
 
@@ -1184,7 +1186,7 @@ if __name__ == "__main__":
 
     # save_concentration_factors_to_file(folder_fits='sdf_and_fits',
     #                                    molecule=molecule,
-    #                                    save_filename='concentrations_'+ today + '_' + hour_now + '_' + molecule+'.txt')
+    #                                    save_filename='concentrations_1arcsec_max_mov_'+ today + '_' + hour_now + '_' + molecule+'.txt')
 
 
     # plot_parameters(save=True)
@@ -1205,7 +1207,7 @@ if __name__ == "__main__":
 
     make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
                                  , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_2025-07-27.txt',
-                                 parameter='ir_index',molecule=molecule, save=False)
+                                 parameter='gravity',molecule=molecule, save=False) #ir_index
 
     # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots.txt',
     #                                 spectral_map_file='spectrum_parameters_'+molecule+'.txt',
