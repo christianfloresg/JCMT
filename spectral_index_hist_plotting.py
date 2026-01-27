@@ -15,7 +15,8 @@ import matplotlib.pyplot as plt
 FILE = "text_files/combined_yso_parameters_v2.xlsx"
 INDEX_TO_PLOT = "indices__spectral_index"  # <- choose one of the three
 # BINS = "auto"            # or an int, e.g. 20
-BINS = np.arange(-1.3, 1.3, 0.25)
+# BINS = np.arange(-1.3, 1.3, 0.25)
+BINS = np.arange(50,1600,100)
 
 DENSITY = False          # True -> probability density; False -> counts
 ALPHA = 0.65
