@@ -35,7 +35,11 @@ def are_names_approximate(name1, name2, threshold=0.8):
     # Return True if similarity exceeds the threshold
     return similarity >= threshold
 
-def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoord=True, gaussian_fit=False,plot=False):
+def calculate_concentration_factor(source_name, molecule,
+                                   n_sigma=3, use_skycoord=True,
+                                   gaussian_fit=False,plot=False,
+                                   moment_maps_folder='moment_maps',
+                                   aperture=None):
     '''
     Calculate concentration factors from molecular data as defined
     in van Kempen 2009 and Carney 2016
@@ -52,19 +56,31 @@ def calculate_concentration_factor(source_name, molecule, n_sigma=3, use_skycoor
     print('molecule ',data_cube.molecule)
 
     if 'HCO+' in data_cube.molecule:
-        aperture_radius = 7.05
+        if aperture is None:
+            aperture_radius = 7.05
+        else:
+            aperture_radius = aperture/2.
+
 
     elif data_cube.molecule == 'C18O':
-        aperture_radius = 7.635
+        if aperture is None:
+            aperture_radius = 7.635
+        else:
+            aperture_radius = aperture/2.
 
     beam_size = np.pi/(4*np.log(2)) * (2 * aperture_radius)**2
-    peak_integrated_emission = peak_integrated_emission_from_map(source_name, molecule, use_skycoord=use_skycoord) ### This one requires object information.
+    peak_integrated_emission = peak_integrated_emission_from_map(source_name, molecule,
+                                                                 use_skycoord=use_skycoord,
+                                                                 moment_maps_folder= moment_maps_folder) ### This one requires object information.
 
     if gaussian_fit:
-        area, integrated_emission = area_and_emission_via_gaussian(source_name, molecule, save_fig=plot, diagnostics=True)
+        area, integrated_emission = area_and_emission_via_gaussian(source_name, molecule,
+                                                                   save_fig=plot, diagnostics=True,
+                                                                   moment_maps_folder= moment_maps_folder)
 
     else:
-        area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=plot)
+        area , integrated_emission = area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma, plot=plot,
+                                                                              moment_maps_folder= moment_maps_folder)
 
 
     concentration = 1 - beam_size / area * integrated_emission / peak_integrated_emission
@@ -1178,11 +1194,18 @@ def make_histograms(filename, parameter='gravity', molecule='HCO+',save=False):
 
 if __name__ == "__main__":
 
-    source_name = 'IRAS04181+2655S'
+    source_name = 'GV_Tau'
     molecule ='HCO+'
     # molecule ='C18O'
 
-    # calculate_concentration_factor(source_name, molecule, n_sigma=1, gaussian_fit=True, plot=True, use_skycoord=True)
+    moment_maps_folder = 'moment_maps'
+    aperture=None
+
+    calculate_concentration_factor(source_name, molecule,
+                                   n_sigma=1, gaussian_fit=True,
+                                   plot=True, use_skycoord=True,
+                                   moment_maps_folder=moment_maps_folder,
+                                   aperture=aperture)
 
     # save_concentration_factors_to_file(folder_fits='sdf_and_fits',
     #                                    molecule=molecule,
@@ -1205,9 +1228,9 @@ if __name__ == "__main__":
     # make_histograms(filename='text_files/Class_I_for-JCMT-plots-with_names-corrected.txt', parameter='gravity',
     #                                molecule=molecule,save=False)
 
-    make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
-                                 , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_2025-07-27.txt',
-                                 parameter='gravity',molecule=molecule, save=False) #ir_index
+    # make_histogram_several_files(filename='text_files/Class_I_for-JCMT-plots.txt'
+    #                              , map_file='spectrum_parameters_HCO+.txt',ir_file='text_files/my_spectral_indices_2025-07-27.txt',
+    #                              parameter='gravity',molecule=molecule, save=False) #ir_index
 
     # plot_spectral_vs_map_parameters(spectrum_file='text_files/Class_I_for-JCMT-plots.txt',
     #                                 spectral_map_file='spectrum_parameters_'+molecule+'.txt',

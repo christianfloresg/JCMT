@@ -598,7 +598,7 @@ def create_moment_eight_map(source_name,molecule):
     return moment_eight
 
 
-def peak_integrated_emission_from_map(source_name, molecule, use_skycoord=True):
+def peak_integrated_emission_from_map(source_name, molecule, moment_maps_folder='moment_maps', aperture=None, use_skycoord=True,):
     '''
     Find the peak integrated emission within the moment zero map.
     :param source_name:
@@ -612,17 +612,24 @@ def peak_integrated_emission_from_map(source_name, molecule, use_skycoord=True):
     data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
 
     # moment_eight = create_moment_eight_map(source_name, molecule)
-    moment_zero = create_moment_zero_map(source_name, molecule)
+    moment_zero = find_moment_zero_map(source_name, molecule, moment_maps_folder)
 
     simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
     skycoord_object = get_icrs_coordinates(simbad_name)
 
 
     if 'HCO+' in data_cube.molecule:
-        aperture_radius = 7.05 ## This is in arcsec
+        if aperture is None:
+            aperture_radius = 7.05
+        else:
+            aperture_radius = aperture/2.
+
 
     elif data_cube.molecule == 'C18O':
-        aperture_radius = 7.635 ## This is in arcsec
+        if aperture is None:
+            aperture_radius = 7.635
+        else:
+            aperture_radius = aperture/2.
 
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
@@ -672,7 +679,8 @@ def peak_integrated_emission_from_map(source_name, molecule, use_skycoord=True):
 
     return peak_integrated_emission
 
-def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot=True,only_whole_area=False):
+def area_and_emission_of_map_above_threshold(source_name,molecule, moment_maps_folder='moment_maps',
+                                             aperture=None, n_sigma=1,plot=True,only_whole_area=False):
     '''
     Computes the area of a map of all the emission
     above a given sigma noise level.
@@ -685,18 +693,23 @@ def area_and_emission_of_map_above_threshold(source_name,molecule,n_sigma=1,plot
     print('molecule ',data_cube.molecule)
 
     if 'HCO+' in data_cube.molecule:
-        aperture_radius = 7.05
-        # cmap = sns.color_palette("YlOrBr",as_cmap=True)
+        if aperture is None:
+            aperture_radius = 7.05
+        else:
+            aperture_radius = aperture/2.
+
 
     elif data_cube.molecule == 'C18O':
-        aperture_radius = 7.635
-        # cmap = sns.color_palette("YlGnBu",as_cmap=True)
+        if aperture is None:
+            aperture_radius = 7.635
+        else:
+            aperture_radius = aperture/2.
 
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
 
 
-    image_mom_0 = create_moment_zero_map(source_name, molecule)
+    image_mom_0 = find_moment_zero_map(source_name, molecule, moment_maps_folder)
     # image_mom_0 = image_mom_0[20:-17,20:-17]
 
     try:
@@ -870,7 +883,8 @@ def plot_fit_diagnostics(
     plt.tight_layout()
     plt.show()
 
-def area_and_emission_via_gaussian(source_name, molecule, save_fig=False, diagnostics=False):
+def area_and_emission_via_gaussian(source_name, molecule, moment_maps_folder='moment_maps',aperture=None,
+                                   save_fig=False, diagnostics=False):
     """
     Fit a 2D Gaussian to the moment-0 map with the center allowed to move up to ±5 arcsec
     from the near-IR source coordinates. Define Robs from the fitted FWHM_circ (see note below).
@@ -901,7 +915,7 @@ def area_and_emission_via_gaussian(source_name, molecule, save_fig=False, diagno
     # ---------- load data ----------
     filename = f"{source_name}_{molecule}"
     data_cube = DataAnalysis(os.path.join('sdf_and_fits', source_name), filename + '.fits')
-    image_mom_0 = create_moment_zero_map(source_name, molecule)  # 2D array
+    image_mom_0 = find_moment_zero_map(source_name, molecule, moment_maps_folder)  # 2D array
 
     # Near-IR center from SIMBAD
     simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt',
@@ -914,11 +928,18 @@ def area_and_emission_via_gaussian(source_name, molecule, save_fig=False, diagno
     pixscale_y = abs(data_cube.cdelt_dec)
     pixel_area_arcsec2 = pixscale_x * pixscale_y
 
-    # Pixels-per-beam (fallback circular beam from your constants)
     if 'HCO+' in data_cube.molecule:
-        aperture_radius = 7.05  # arcsec (your "FWHM/2" convention)
+        if aperture is None:
+            aperture_radius = 7.05
+        else:
+            aperture_radius = aperture/2.
+
+
     elif data_cube.molecule == 'C18O':
-        aperture_radius = 7.635
+        if aperture is None:
+            aperture_radius = 7.635
+        else:
+            aperture_radius = aperture/2.
     else:
         raise Exception("Sorry, I need to calculate such aperture radius")
 
@@ -1141,7 +1162,7 @@ def area_and_emission_via_gaussian(source_name, molecule, save_fig=False, diagno
 
     return area_arcsec2, total_emission
 
-def create_moment_zero_map(source_name,molecule):
+def find_moment_zero_map(source_name,molecule,moment_maps_folder='moment_maps'):
     '''
     Create moment maps using BTS coode.
     Need to give the data, velocity, and rms levels.
@@ -1152,7 +1173,7 @@ def create_moment_zero_map(source_name,molecule):
     '''
     filename = source_name + '_' + molecule  # 'V347_Aur_HCO+'
     # data_cube = DataAnalysis(os.path.join('sdf_and_fits', source_name), filename + '.fits')
-    moment_0 = DataAnalysis(os.path.join('moment_maps', source_name), filename + '_mom0.fits')
+    moment_0 = DataAnalysis(os.path.join(moment_maps_folder, source_name), filename + '_mom0.fits')
 
     image_mom_0 = moment_0.ppv_data
 
@@ -1192,7 +1213,7 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     print('skycoord are: ',skycoord_object)
     print ('wcs', moment_0.wcs.wcs_pix2world(moment_0.nx/2, moment_0.ny/2, 0))
 
-    image_mom_0 = create_moment_zero_map(source_name, molecule)
+    image_mom_0 = find_moment_zero_map(source_name, molecule)
 
     # rotated image only for SCAN data, Check MAP_PA, use *-1 value
 
