@@ -19,6 +19,7 @@ source_names  = df["SourceName"].astype(str)
 # ---------------------------------------
 # Apply classification rules
 # ---------------------------------------
+
 envelope_mask = (hco_plus > 0.6) & (integ_beam > 0.3)
 group = np.where(envelope_mask, "envelope", "envelope_free")
 
@@ -81,7 +82,7 @@ print(f"\nGravity at 50% envelope probability: {x50:.4f}")
 plt.figure(figsize=(8,6))
 
 # Jitter scatter (0 and 1)
-jitter = (np.random.rand(len(df_model)) - 0.5) * 0.05
+jitter = (np.random.rand(len(df_model)) - 0.5) * 0.01
 # plt.scatter(df_model["gravity"], df_model["y"] + jitter, s=50, alpha=0.6)
 
 plt.errorbar(df_model["gravity"], df_model["y"] + jitter, xerr=[df_model["grav_unce_down"],df_model["grav_unce_up"]], fmt='o', color='k',
@@ -103,5 +104,5 @@ plt.ylabel("P(envelope)",size=14)
 plt.ylim(-0.1, 1.1)
 plt.legend()
 plt.tight_layout()
-plt.savefig('logistic_curve.png')
+# plt.savefig('logistic_curve.png')
 plt.show()
