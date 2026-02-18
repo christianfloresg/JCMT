@@ -214,7 +214,7 @@ def plot_logit(
         plt.title(title)
     plt.legend()
     plt.tight_layout()
-    plt.savefig("logistic_curve_Feb17.png",dpi=300)
+    # plt.savefig("logistic_curve_Feb17.png",dpi=300)
     plt.show()
 
 
