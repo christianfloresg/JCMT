@@ -179,43 +179,84 @@ def plot_logit(
     xerr_hi_col: str = XERR_HI_COL,
     title: str | None = None,
 ):
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-    # Jitter y for visualization
+    # Colors
+    col_yes = "#bebada"   # envelope
+    col_no  = "#ffffb3"   # no envelope
+
+    # Jitter y for visualization (make it index-aligned)
     rng = np.random.default_rng(42)
-    jitter = (rng.random(len(df_model)) - 0.5) * 0.02
+    jitter_vals = (rng.random(len(df_model)) - 0.5) * 0.04
+    jitter = pd.Series(jitter_vals, index=df_model.index)
 
-    # Points with x-error bars
-    plt.errorbar(
-        df_model[x_col],
-        df_model["y"] + jitter,
-        xerr=[df_model[xerr_lo_col], df_model[xerr_hi_col]],
+    # Split data
+    df_yes = df_model[df_model["y"] == 1]
+    df_no  = df_model[df_model["y"] == 0]
+
+    # Plot "yes" points
+    ax.errorbar(
+        df_yes[x_col],
+        df_yes["y"] + jitter.loc[df_yes.index],
+        xerr=[df_yes[xerr_lo_col], df_yes[xerr_hi_col]],
         fmt="o",
-        color="k",
-        ecolor="gray",
-        capsize=3,
-        alpha=0.55,
-        zorder=2,
-        ms=9,
+        ms=18,
         lw=1,
+        color=col_yes,
+        ecolor="gray",
+        alpha=0.9,
+        capsize=3,
+        mec='k',
+        label="Envelope",
+        zorder=3,
     )
 
-    # Curve + band
-    plt.plot(x_grid, curve_mean, "k-", lw=2, label="Logistic fit")
-    plt.fill_between(x_grid, band_lo, band_hi, alpha=0.25, label="95% band")
+    # Plot "no" points
+    ax.errorbar(
+        df_no[x_col],
+        df_no["y"] + jitter.loc[df_no.index],
+        xerr=[df_no[xerr_lo_col], df_no[xerr_hi_col]],
+        fmt="o",
+        ms=18,
+        mec='k',
+        lw=1,
+        color=col_no,
+        ecolor="gray",
+        alpha=0.9,
+        capsize=3,
+        label="No envelope",
+        zorder=3,
+    )
 
-    # 50% line
-    plt.axvline(x50, linestyle="--", color="red", label=f"50% point = {x50:.2f}")
+    # Logistic curve and confidence band
+    ax.plot(x_grid, curve_mean, color="black", lw=2, label="Logistic fit", zorder=4)
+    ax.fill_between(x_grid, band_lo, band_hi, color="black", alpha=0.15, label="95% CI")
 
-    plt.xlabel("Gravity", fontsize=14)
-    plt.ylabel("P(envelope)", fontsize=14)
-    plt.ylim(-0.1, 1.1)
+    # 50% threshold
+    ax.axvline(
+        x50,
+        linestyle="--",
+        color="red",
+        lw=2,
+        label=f"$P=0.5$ at $\\log g={x50:.2f}$",
+    )
+
+    # Labels / limits / ticks
+    ax.set_xlabel(r"$\log g$", fontsize=16)
+    ax.set_ylabel("Envelope detection", fontsize=16)
+    ax.set_xlim(2.65, 3.92)
+    ax.set_ylim(-0.15, 1.15)
+
+    ax.tick_params(axis="both", which="major", labelsize=14)
+    ax.legend(fontsize=12, frameon=False)
+
     if title:
-        plt.title(title)
-    plt.legend()
-    plt.tight_layout()
-    # plt.savefig("logistic_curve_Feb17.png",dpi=300)
+        ax.set_title(title, fontsize=16)
+
+    fig.tight_layout()
+    fig.savefig("logistic_curve_envelope_vs_gravity.png", dpi=300)
     plt.show()
+
 
 
 # ----------------------------
@@ -272,7 +313,7 @@ def run(
         band_lo=lo,
         band_hi=hi,
         x50=x50,
-        title="Envelope probability vs Gravity",
+        # title="Envelope probability vs Gravity",
     )
 
     return res, df_model
@@ -282,6 +323,6 @@ if __name__ == "__main__":
     run(
         path=DEFAULT_PATH,
         use_monte_carlo=True,  # set False to use standard GLM CI instead
-        n_sims=5000,
+        n_sims=500,
         alpha=0.05,
     )

@@ -596,14 +596,14 @@ if __name__ == "__main__":
     # print([c for c in df.columns if "sum_Kkms" in c or "W_sum_UL" in c or c.startswith("Mgas_Msun")])
 
     # (1) gravity vs concentration (no colors)
-    plot_gravity_vs_concentration(df, "C18O", title_suffix="C¹⁸O")
-    plot_gravity_vs_concentration(df, "HCOplus", title_suffix="HCO⁺")
+    # plot_gravity_vs_concentration(df, "C18O", title_suffix="C¹⁸O")
+    # plot_gravity_vs_concentration(df, "HCOplus", title_suffix="HCO⁺")
     #
     # (2) gravity vs sum_Kkms_arcsec2, UL arrows when sum missing
-    plot_gravity_vs_integrated_sum_with_UL(df, "C18O", title_suffix="C¹⁸O", divide_by_binarity=True)
+    # plot_gravity_vs_integrated_sum_with_UL(df, "C18O", title_suffix="C¹⁸O", divide_by_binarity=True)
     # plot_gravity_vs_integrated_sum_with_UL(df, "C18O", title_suffix="C¹⁸O", divide_by_binarity=False)
 
-    plot_gravity_vs_integrated_sum_with_UL(df, "HCOplus", title_suffix="HCO⁺", divide_by_binarity=True)
+    # plot_gravity_vs_integrated_sum_with_UL(df, "HCOplus", title_suffix="HCO⁺", divide_by_binarity=True)
     # plot_gravity_vs_integrated_sum_with_UL(df, "HCOplus", title_suffix="HCO⁺", divide_by_binarity=False)
 
     #
@@ -611,14 +611,14 @@ if __name__ == "__main__":
     # plot_gravity_vs_ratio_C18O_over_HCOplus(df)
     #
     # # (4) gravity vs Mgas_Msun_* with median + max-deviation error bars
-    # plot_gravity_vs_mgas_median(df, divide_by_binarity=True)
+    plot_gravity_vs_mgas_median(df, divide_by_binarity=True)
 
     # # (5) Temperature vs Mgas_Msun_* with median + max-deviation error bars
 
-    plot_parameter_vs_mgas_median_with_UL(
-        df,
-        param_col="gravity",
-        divide_by_binarity=True,      # per-star
-        binarity_col="Binarity",
-        envelope_coloring=True
-    )
+    # plot_parameter_vs_mgas_median_with_UL(
+    #     df,
+    #     param_col="gravity",
+    #     divide_by_binarity=True,      # per-star
+    #     binarity_col="Binarity",
+    #     envelope_coloring=True
+    # )
