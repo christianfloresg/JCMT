@@ -1,3 +1,5 @@
 SourceName,gravity,Envelope_status,indices__spectral_index,indices__corr_spectral_index_lit,spectral_index_SED,spectral_index_corrected_SED,Tbol
 EC92,2.8904,unclear,0.92,0.05,0.688,0.368,508.048
+IRAS03260+3111B,3.16,unclear,-0.566,-0.704,1.7,1.621,162.571
+IRAS04181+2655S,3.7512,unclear,0.462,0.462,0.528,-0.026,304.922
 IRAS05379-0758,3.1250999999999998,unclear,-0.723,-1.037,-0.653,-0.854,1275.985

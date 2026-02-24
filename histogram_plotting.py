@@ -5,6 +5,11 @@ from pathlib import Path
 from scipy.stats import sem, ks_2samp
 import os
 from scipy.stats import sem, ks_2samp, mannwhitneyu, anderson_ksamp
+from datetime import date,datetime
+
+today = str(date.today())
+currentDateAndTime = datetime.now()
+hour_now = str(currentDateAndTime.hour)
 
 # ----------------------------
 # Load and prepare data
@@ -107,7 +112,7 @@ def save_groups(groups, outdir):
 # ----------------------------
 # Plot histogram
 # ----------------------------
-def plot_histogram(groups, outdir, property ="gravity"):
+def plot_histogram(groups, outdir, property ="gravity",save=False):
     bins = np.arange(-1.4, 1.1, 0.20)
     if property=='gravity':
         bins = np.arange(2.60, 4.00, .10)
@@ -119,11 +124,16 @@ def plot_histogram(groups, outdir, property ="gravity"):
     elif property == "Tbol":
         bins = np.arange(50, 1600, 100)
 
+
+
     colors = {
-        "envelope": "#bebada",
-        "envelope_free": "gold",
-        "confused": "#8dd3c7",
-    }
+        # "envelope": "#bebada",
+        # "envelope_free": "gold",
+        # "confused": "#8dd3c7",
+        "envelope": "#756bb1",     # darker lavender / purple
+        "envelope_free": "#e6ab02",      # mustard instead of pale yellow
+        "confused": "#1b9e77"  # deeper teal-green
+        }
     hatches = {
         "envelope": ".",
         "envelope_free": None,
@@ -152,8 +162,9 @@ def plot_histogram(groups, outdir, property ="gravity"):
     plt.legend(fontsize=12)
     plt.tick_params(axis="both", labelsize=14)
     plt.tight_layout()
-    fig_path = os.path.join(Path(outdir),property+"_by_group.png")
-    plt.savefig(fig_path, dpi=150)
+    fig_path = os.path.join(Path(outdir),property+"_"+today+"_by_group.png")
+    if save:
+        plt.savefig(fig_path, dpi=150)
     plt.show()
 
     print(f"\nHistogram saved to {fig_path}")
@@ -244,7 +255,7 @@ def compute_statistics(df, property="gravity"):
 # ----------------------------
 def main():
     FILE = "text_files/combined_yso_parameters_v2.xlsx"
-    property = "Tbol"#'spectral_index_corrected_SED'#'spectral_index_SED' #"gravity"
+    property = 'spectral_index_SED'#"Tbol"#'spectral_index_corrected_SED'#'spectral_index_SED' # "gravity"
     OUTDIR = f"histograms/group_output_{property}"
 
     df = load_data(FILE)
@@ -252,7 +263,7 @@ def main():
 
     groups = split_groups(df)
     save_groups(groups, OUTDIR)
-    plot_histogram(groups, OUTDIR, property)
+    plot_histogram(groups, OUTDIR, property,save=True)
     compute_statistics(df, property)
 
 

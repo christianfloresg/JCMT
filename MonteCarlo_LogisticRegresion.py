@@ -130,6 +130,9 @@ def monte_carlo_band(
     - pointwise (1-alpha) bands (percentiles)
     - distribution of x50
     """
+
+    percentage_of_envelope = 50
+
     rng = np.random.default_rng(seed)
 
     x_obs = df_model[x_col].to_numpy()
@@ -148,7 +151,7 @@ def monte_carlo_band(
 
         pred_i = predict_curve(res_i, x_grid, alpha=alpha)["mean"].to_numpy()
         preds[i, :] = pred_i
-        x50s[i] = x_at_p(res_i, 0.5)
+        x50s[i] = x_at_p(res_i, percentage_of_envelope/100.)
 
     lower_q = 100 * (alpha / 2)
     upper_q = 100 * (1 - alpha / 2)
@@ -254,7 +257,7 @@ def plot_logit(
         ax.set_title(title, fontsize=16)
 
     fig.tight_layout()
-    fig.savefig("logistic_curve_envelope_vs_gravity.png", dpi=300)
+    # fig.savefig("logistic_curve_envelope_vs_gravity.png", dpi=300)
     plt.show()
 
 
@@ -322,7 +325,7 @@ def run(
 if __name__ == "__main__":
     run(
         path=DEFAULT_PATH,
-        use_monte_carlo=True,  # set False to use standard GLM CI instead
+        use_monte_carlo=False,  # set False to use standard GLM CI instead
         n_sims=500,
         alpha=0.05,
     )
