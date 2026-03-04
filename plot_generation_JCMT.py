@@ -23,7 +23,8 @@ from astropy.nddata import NDData
 from astropy.visualization import simple_norm
 # from photutils.aperture import CircularAperture, aperture_photometry
 from photutils.aperture import CircularAperture, EllipticalAperture, aperture_photometry
-
+from plot_spectra_JCMT import make_central_spectrum_data, make_averaged_spectrum_data
+from helper_functions import *
 # from skimage.transform import rotate
 
 today = str(date.today())
@@ -65,175 +66,6 @@ def create_alternating_circle(ax, skycoord_object, aperture_radius, num_segments
         # Add the arc segment to the plot
         # return arc
         ax.add_patch(arc)
-
-def find_simbad_source_in_file(file_name, search_word):
-    """
-    Reads a text file, ignoring lines starting with '#', and searches for a word in the first column.
-    If found, returns the rest of the line. If not found, prints a message and exits.
-
-    :param file_name: The name of the text file
-    :param search_word: The word to search for in the first column of the file
-    :return: The rest of the line if the word is found, otherwise prints a message
-    """
-    try:
-        with open(file_name, 'r') as file:
-            for line in file:
-                # Skip lines starting with '#' or that are empty
-                if line.startswith("#") or not line.strip():
-                    continue
-
-                # Split the line into first word and the rest, without unnecessary stripping
-                parts = line.split(maxsplit=1)
-
-                if parts[0] == search_word:
-                    # Return the rest of the line as soon as the word is found
-                    print("You are using the coordinates of " + parts[1])
-                    return parts[1] if len(parts) > 1 else ''
-
-        # If no match is found
-        print("This source is not in the list.")
-
-    except FileNotFoundError:
-        print(f"Error: The file {file_name} does not exist.")
-
-    return None
-
-
-def find_word_in_file(file_name, search_word, position):
-    """
-    Reads a text file, ignoring lines starting with '#', and searches for a word in the first column.
-    If found, returns the word at the requested position in the same line. If not found, prints a message and exits.
-
-    :param file_name: The name of the text file
-    :param search_word: The word to search for in the first column of the file
-    :param position: The index of the word in the line to return (0-based)
-    :return: The word at the specified position if the word is found, otherwise prints a message
-    """
-
-    header = []
-    try:
-        with open(file_name, 'r') as file:
-            for line in file:
-                # Skip lines starting with '#' or that are empty
-                if line.startswith("#") or not line.strip():
-                    header.append(line.split())
-                    # print(header)
-                    continue
-
-                # Split the line into words
-                parts = line.split()
-
-                if parts[0] == search_word:
-                    # Check if the requested position is within bounds
-                    if position < len(parts):
-                        print(f"For source {line.split()[0]}, the value of "
-                              f"{header[0][position+1]} is {parts[position]} {header[1][position+1]}")
-                        return parts[position]
-                    else:
-                        print(f"Error: The requested position {position} is out of bounds.")
-                        return None
-
-        # If no match is found
-        print("This source is not in the list.")
-
-    except FileNotFoundError:
-        print(f"Error: The file {file_name} does not exist.")
-
-    return None
-
-
-def closest_idx(lst, val):
-    lst = np.asarray(lst)
-    idx = (np.abs(lst - val)).argmin()
-    return idx
-
-
-
-def make_averaged_spectrum_data(source_name, molecule):
-    """
-    Average spectrum of the whole cube.
-    """
-
-    filename = source_name+'_'+molecule
-    data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
-    # moment_0 = DataAnalysis(os.path.join('moment_maps',source_name), filename+'_mom0.fits')
-
-
-    velocity = data_cube.vel
-    cube = data_cube.ppv_data#[:,5:-5,5:-5]
-
-    # plt.imshow(np.nansum(cube,axis=0))
-    # plt.show()
-
-    averaged_spectrum = np.nanmean(cube, axis=(1,2))
-
-    return averaged_spectrum, velocity
-
-
-def make_central_spectrum_data(source_name, molecule,noskycoord=False):
-    """
-    Average spectrum of the central beam.
-
-    """
-    simbad_name = find_simbad_source_in_file(file_name='text_files/names_to_simbad_names.txt', search_word=source_name)
-    skycoord_object = get_icrs_coordinates(simbad_name)
-
-    filename = source_name+'_'+molecule
-    data_cube = DataAnalysis(os.path.join('sdf_and_fits',source_name), filename+'.fits')
-
-
-    if 'HCO+' in data_cube.molecule:
-        aperture_radius = 7.05 ## This is in arcsec
-
-    elif data_cube.molecule == 'C18O':
-        aperture_radius = 7.635 ## This is in arcsec
-
-    else:
-        raise Exception("Sorry, I need to calculate such aperture radius")
-
-    pixel_scale_ra = data_cube.header['CDELT1'] * 3600  # arcseconds per pixel
-    pixel_scale_dec = data_cube.header['CDELT2'] * 3600  # arcseconds per pixel
-    aperture_radius_pixels = abs(aperture_radius/pixel_scale_ra)
-
-
-
-    velocity = data_cube.vel
-
-
-    if noskycoord:
-        print('I am not using the skycoordinates of the object, instead taking the\\ spectrum from the central pixels')
-        #### Only use this if there is a problem with WCS and you need to calculate the spectrum at the center.
-        ra_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[0]
-        dec_center = data_cube.wcs.celestial.all_pix2world(data_cube.nx / 2, data_cube.ny / 2, 0)[1]
-        skycoord_object = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
-        print(skycoord_object)
-
-    # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
-    x_center, y_center = data_cube.wcs.celestial.world_to_pixel(skycoord_object) ## This one if 3D cube
-
-
-    print(f"These are the sky coordinates of your {source_name}: ", skycoord_object)
-
-    # Initialize a list to store the pixel values within the aperture
-    center_beam_values = []
-
-    # Iterate over a square region, but filter by distance to make it circular
-    for xx in range(int(x_center - aperture_radius_pixels), int(x_center + aperture_radius_pixels) + 1):
-        for yy in range(int(y_center - aperture_radius_pixels), int(y_center + aperture_radius_pixels) + 1):
-            # Calculate the distance from the center
-            distance = np.sqrt((xx - x_center) ** 2 + (yy - y_center) ** 2)
-
-            # Check if the distance is within the aperture radius
-            if distance <= aperture_radius_pixels:
-                # Append the data at this pixel position
-                center_beam_values.append(data_cube.ppv_data[:, yy, xx])
-
-    # Convert center_beam_values to a NumPy array for easy manipulation
-    center_beam_values = np.array(center_beam_values)
-
-    average_spectrum = np.nanmean(center_beam_values, axis=0)
-
-    return average_spectrum, velocity
 
 
 def retrieve_and_write_spectral_properties(source_name, molecule, plot=True,noskycoord=False):
@@ -355,74 +187,6 @@ def retrieve_and_write_spectral_properties(source_name, molecule, plot=True,nosk
     write_or_update_values(file_name='spectrum_parameters_' + molecule + '.txt', new_values=values_to_text)
 
 
-
-def plot_spectrum(source_name, molecule, type='central', save=False, plot=True):
-    """
-    This one plots the average spectrum
-    """
-    if type.lower()=='fov':
-        spectrum, velocity = make_averaged_spectrum_data(source_name,molecule)
-        title = 'FOV averaged spectrum \n' + source_name + ' for ' + molecule
-    else:
-        spectrum, velocity = make_central_spectrum_data(source_name, molecule)
-        title = 'Central beam  spectrum \n' + source_name + ' for ' + molecule
-
-    try:
-        ### I first try to get the velocity centroid from the data saved in text file.
-        pos = find_word_in_file(file_name='spectrum_parameters_'+molecule+'.txt', search_word=source_name, position=6)
-        pos = float(pos)
-        print('I found this value', pos)
-    except:
-        pos, FHWM, sigma = fit_gaussian_to_spectrum(spectrum, velocity,velo_range=[-20,30],plot=False)
-
-
-    plt.figure()
-    # plt.title("Averaged Spectrum ("+mole_name+") @"+dir_each)
-
-    plt.xlabel("velocity (km/s)",size=14)
-    plt.ylabel("Averaged Spectrum (K)",size=14)
-    plt.title(title)
-    plt.plot(velocity,spectrum,"-",color="black",lw=1)
-
-    plt.tick_params(axis='both', direction='in')
-    plt.xlim(pos - 10, pos+ 10)
-    if save:
-        plt.savefig(os.path.join('Figures/Spectra/', 'spectrum_'+source_name+'_'+molecule+'_'+type), bbox_inches='tight', dpi=300)
-
-    if plot:
-        plt.show()
-
-
-def get_icrs_coordinates(object_name):
-    '''
-    get coordinates of astronomical objects by querying to SIMBAD names
-    :param object_name:
-    :return:
-    '''
-    # Initialize Simbad object and customize output to include coordinates
-    custom_simbad = Simbad()
-    custom_simbad.add_votable_fields('coordinates')
-
-    # Query Simbad for the object
-    result_table = custom_simbad.query_object(object_name)
-
-    # Check if the query returned any results
-    if result_table is None:
-        print(f"Object '{object_name}' not found in SIMBAD.")
-        return None
-
-    # Extract the RA and DEC columns from the result
-    ra = result_table['RA'][0]  # Right Ascension in HMS (hours, minutes, seconds)
-    dec = result_table['DEC'][0]  # Declination in DMS (degrees, arcminutes, arcseconds)
-
-
-    # Convert RA and DEC to a SkyCoord object in the ICRS frame
-    coord = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg), frame='icrs')
-    # coord = SkyCoord(ra=ra, dec=dec, unit=(u.hourangle, u.deg), frame='fk5')
-    # Return the ICRS coordinates in degrees
-    return coord
-
-
 def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=False,plot=True):
     '''
     Plot the moment eight map of a source and molecule
@@ -511,7 +275,7 @@ def plot_moment_eight_map(source_name,molecule,use_sky_coord_object=True,save=Fa
         plt.show()
 
 
-def offset_coordinates(ax,skycoord_object):
+def offset_coordinates(ax,skycoord_object,tick_label_size=16,coordinates_on=True):
     ra = ax.coords['ra']
     ra.set_auto_axislabel(False)
     dec = ax.coords['dec']
@@ -531,11 +295,11 @@ def offset_coordinates(ax,skycoord_object):
     lon.set_ticklabel_position('b')
     lon.set_axislabel_position('b')
     lon.set_ticks(spacing=20. * u.arcsec)
-    lon.set_ticklabel(size=13)
+    lon.set_ticklabel(size=tick_label_size)
 
     lat = overlay['lat']
     lat.set_format_unit(u.arcsec)
-    lat.set_ticklabel(size=13)
+    lat.set_ticklabel(size=tick_label_size)
     lat.set_ticks_position('l')
     lat.set_ticklabel_position('l')
     lat.set_axislabel_position('l')
@@ -545,8 +309,17 @@ def offset_coordinates(ax,skycoord_object):
     lon.set_auto_axislabel(False)
     lat.set_auto_axislabel(False)
 
-    # lon.set_axislabel(r'$\Delta$RA',size=12)
     # lat.set_axislabel(r'$\Delta$DEC',size=12)
+    # lon.set_axislabel(r'$\Delta$RA',size=12)
+
+    if coordinates_on==False:
+        # lon.set_ticklabel_visible(False)  # RA
+        # lon.set_axislabel(r'$\Delta$RA',size=12)
+
+
+        lat.set_ticklabel_visible(False)  # Dec
+        lat.set_axislabel(r'$\Delta$DEC',size=12)
+
 
     # lat.set_axislabel(text=' ')
     # lon.set_axislabel(text=' ')
@@ -1225,10 +998,11 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     if 'HCO+' in data_cube.molecule:
         aperture_radius = 7.05
         cmap = sns.color_palette("YlOrBr",as_cmap=True)
-
+        x_point_color = 'aquamarine'
     elif data_cube.molecule == 'C18O':
         aperture_radius = 7.635
         cmap = sns.color_palette("YlGnBu",as_cmap=True)
+        x_point_color = 'magenta'
 
     elif data_cube.molecule == 'CO':
         aperture_radius = 7.635
@@ -1267,9 +1041,9 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         print('number of velocity pixles', float_sigma_vel*6/0.2)
 
         if 'HCO+' in data_cube.molecule:
-            moment_zero_noise_array = moment_zero_noise* np.array([1, 3, 5,10, 20, 40, 60, 80, 100,150])
+            moment_zero_noise_array = moment_zero_noise* np.array([3, 5,10, 20, 40, 60, 80, 100,150,200,300,400])
         elif data_cube.molecule == 'C18O':
-            moment_zero_noise_array = moment_zero_noise* np.array([1,3,5,7,9,12,15,20,30,40])
+            moment_zero_noise_array = moment_zero_noise* np.array([3,5,7,9,12,15,20,30,40,60,80])
     # print(noise_level)
         # print(sigma_vel)
         # print (moment_zero_noise)
@@ -1292,12 +1066,12 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
     # cax = divider.append_axes(position="top", size="10%", pad=0.05)
     # cbar_ax = fig1.add_axes([0.3, 0.92, 0.4, 0.03])  # 40% width, centered, above plot
     cbar = ax.colorbar(mom0_im, location='top', orientation='horizontal', format='%.1f',fraction=0.047,pad=0.01)# fraction=0.048, pad=0.04)
-    cbar.set_label(label='Integrated Intensity ' +r'(K km s$^{-1}$)', size=14)
-    cbar.ax.tick_params(labelsize=13, direction='in')
+    # cbar.set_label(label='Integrated Intensity ' +r'(K km s$^{-1}$)', size=16)
+    cbar.ax.tick_params(labelsize=16, direction='in')
 
     contour = fig1.contour(image_mom_0, levels=levels, colors="black")
     plt.clabel(contour, inline=True, fontsize=8, fmt='%1.2f')
-    plt.tick_params(axis='both', labelsize=24)  # 'both' = x and y
+    plt.tick_params(axis='both', labelsize=38)  # 'both' = x and y
 
     fig1.set_xlabel('RA',size=12)
     fig1.set_ylabel('DEC',size=12)
@@ -1310,13 +1084,26 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
 
     if use_sky_coord_object:
 
-        offset_coordinates(fig1, skycoord_object)
+        offset_coordinates(fig1, skycoord_object,coordinates_on=True)
 
         ra_center = skycoord_object.ra.degree
         dec_center = skycoord_object.dec.degree
         print(skycoord_object.to_string('hmsdms'))
-        IR_position = fig1.scatter(x=ra_center,y=dec_center, s=150, c='gray', transform=fig1.get_transform('icrs'), marker='x',
-                                clip_on=False,linewidths=3.0)
+        # IR_position = fig1.scatter(x=ra_center,y=dec_center, s=150, c='m', transform=fig1.get_transform('icrs'), marker='x',
+                                # clip_on=False,linewidths=3.0,zorder=3)
+        IR_position = fig1.scatter(
+            x=ra_center,
+            y=dec_center,
+            s=250,
+            marker='X',
+            facecolors=x_point_color,
+            edgecolors='gray',
+            linewidths=1.5,
+            transform=fig1.get_transform('icrs'),
+            clip_on=False,
+            zorder=3
+        )
+
         sky_center = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
 
         ### FOr DG Tau
@@ -1338,9 +1125,10 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         pixel_limits_ra = 30.5
         pixel_limits_dec = 30.5
 
+        if simbad_name == 'T Tauri':
         #### For T Tauri
-        pixel_limits_ra = 34.
-        pixel_limits_dec = 34.
+            pixel_limits_ra = 34.
+            pixel_limits_dec = 34.
 
         fig1.set_xlim(x_center - pixel_limits_ra, x_center + pixel_limits_ra)
         fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
@@ -1354,10 +1142,20 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
 
         sky_center = SkyCoord(ra=ra_center, dec=dec_center, unit='deg', frame='icrs')
 
-        offset_coordinates(fig1, sky_center)
+        offset_coordinates(fig1, sky_center,coordinates_on=False)
 
-        IR_position = fig1.scatter(x=ra_center,y=dec_center, s=150, c='gray', transform=fig1.get_transform('icrs'), marker='x',
-                                clip_on=False,linewidths=3.0)
+        IR_position = fig1.scatter(
+            x=ra_center,
+            y=dec_center,
+            s=250,
+            marker='X',
+            facecolors=x_point_color,
+            edgecolors='gray',
+            linewidths=1.5,
+            transform=fig1.get_transform('icrs'),
+            clip_on=False,
+            zorder=3
+        )
 
         ra_offset = 50/3600
         dec_offset = 45/3600
@@ -1377,22 +1175,22 @@ def plot_moment_zero_map(source_name,molecule,use_sky_coord_object=False,percent
         fig1.set_xlim(x_center - pixel_limits_ra, x_center + pixel_limits_ra)
         fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
 
-
     ### Change the limits
     print('size of cube in pixels')
     print(data_cube.nx,data_cube.ny)
 
-    # x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
+    x_center, y_center = moment_0.wcs.world_to_pixel(skycoord_object) ## This one if 2D cube
     # pixel_limits_ra = 35
     # pixel_limits_dec = 35
     # fig1.set_xlim(x_center - pixel_limits_ra, x_center + pixel_limits_ra)
     # fig1.set_ylim(y_center - pixel_limits_dec, y_center + pixel_limits_dec)
 
     # plt.axis('square')
-    fig1.tick_params(axis='y', direction='in')
+    # fig1.tick_params(axis='y', direction='in')
+    # fig1.tick_params(axis='both', which='major', labelsize=18,direction='in')
 
     if save:
-        plt.savefig(os.path.join('Figures/Moment_maps/moment-zero/',
+        plt.savefig(os.path.join('Figures/Moment_maps/moment-zero/'+data_cube.molecule+'/',
                                  filename+'clip_'+percentile_outlier_text+'_coord_offset'+today), bbox_inches='tight',dpi=300)
         # plt.savefig(os.path.join('Figures',filename+'_transparent'), bbox_inches='tight', transparent=True)
 
@@ -1440,41 +1238,6 @@ def mass_produce_moment_maps(folder_fits, molecule='C18O'):
         except Exception as e:
             print(f"An unexpected error occurred with {sources}: {e}")
 
-def mass_produce_spectral_plots(folder_fits, molecule):
-    """
-    Processes all folders within 'folder_fits' to generate moment maps and spectra
-    for specified molecules (default is 'C18O').
-
-    Plot moment-zero map.
-
-    All operations are run in no-plotting mode, saving the maps.
-
-    Args:
-        folder_fits (str): Path to the main folder containing subfolders with fits data.
-        molecule (str): Name of the molecule to process ('HCO+' or 'C18O').
-    """
-    folder_list = sorted(next(os.walk(folder_fits))[1])  # List of subfolders
-    print("Folders found:", folder_list)
-
-    for sources in folder_list:
-        try:
-            # Check if the necessary file exists before running the function
-            filename = sources + '_' + molecule
-            fits_file_path = os.path.join(folder_fits, sources, f"{filename}.fits")
-            if not os.path.isfile(fits_file_path):
-                print(f"No such file: {fits_file_path}. Skipping this folder.")
-                continue  # Move to the next folder if the file doesn't exist
-
-            # Generate the moment-zero map
-            plot_spectrum(sources, molecule, type='central', save=True, plot=False)
-            plot_spectrum(sources, molecule, type='fov', save=True, plot=False)
-
-        except IndexError as err:
-            print(f"Spectral line for {sources} was not produced. Check the plots.")
-            print(f"An error occurred: {err}")
-
-        except Exception as e:
-            print(f"An unexpected error occurred with {sources}: {e}")
 
 def mass_calculate_spectral_properties(folder_fits, molecule):
     """
@@ -1549,10 +1312,10 @@ def mass_measurement_from_molecular_lines(source_name, molecule,distance_pc):
 
 if __name__ == "__main__":
 
-    # source_name = 'EC92'
-    source_name = 'IRAS05379-0758'
-    molecule ='HCO+'
-    # molecule ='C18O'
+    source_name = 'IRAS04108+2803'
+    # source_name = 'Elia33'
+    # molecule ='HCO+'
+    molecule ='C18O'
     # distance = 130
     ## Step 0
     # retrieve_and_write_spectral_properties(source_name, molecule, noskycoord=False)
@@ -1570,7 +1333,6 @@ if __name__ == "__main__":
     #### Mass produce moment maps
     # mass_calculate_spectral_properties('sdf_and_fits', molecule)
     # mass_produce_moment_maps('sdf_and_fits',molecule)
-    # mass_produce_spectral_plots('sdf_and_fits',molecule)
 
     # peak_integrated_emission_from_map(source_name, molecule)
     # mass_measurement_from_molecular_lines(source_name, molecule,distance_pc=distance)

@@ -11,7 +11,11 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from plot_generation_JCMT import find_simbad_source_in_file, get_icrs_coordinates
 import os
+from datetime import date,datetime
 
+today = str(date.today())
+currentDateAndTime = datetime.now()
+hour_now = str(currentDateAndTime.hour)
 '''
 2MASS images need to be donwloaded from here. typically sub-image size is 120''
 https://irsa.ipac.caltech.edu/applications/2MASS/IM/interactive.html
@@ -32,7 +36,7 @@ def offset_coordinates(ax,skycoord_object):
     # lon.set_coord_type('longitude', 180)
     lon.set_format_unit(u.arcsec)
     # lon.set_ticklabel(rotation=, pad=2)
-    lon.set_ticklabel(size=17)
+    lon.set_ticklabel(size=21)
     lon.set_ticks_position('b')
     lon.set_ticklabel_position('b')
     lon.set_axislabel_position('b')
@@ -40,7 +44,7 @@ def offset_coordinates(ax,skycoord_object):
 
     lat = overlay['lat']
     lat.set_format_unit(u.arcsec)
-    lat.set_ticklabel(size=17)
+    lat.set_ticklabel(size=21)
     lat.set_ticks_position('l')
     lat.set_ticklabel_position('l')
     lat.set_axislabel_position('l')
@@ -60,6 +64,8 @@ def offset_coordinates(ax,skycoord_object):
     # lat.set_ticklabel_visible(False)
     # lon.set(xlabel=None)
 
+    lon.set_ticklabel_visible(False)  # DEC
+    # lat.set_ticklabel_visible(False)  # RA
 
     # fig1.set_xticklabels([])
     # fig1.set_yticklabels([])
@@ -158,7 +164,7 @@ def twomass_image_to_png(fits_files,source_name,plot=True, pctl= 100):
     offset_coordinates(fig1, skycoord_object)
 
 
-    plt.savefig('Figures/2MASS/'+source_name+'_upper_'+str(pctl).replace('.','p')+'.png', bbox_inches='tight',dpi=300)
+    plt.savefig('Figures/2MASS/'+source_name+'_upper_'+str(pctl).replace('.','p')+'_'+today+'.png', bbox_inches='tight',dpi=300)
     # plt.axis('square')
 
     if plot:
@@ -179,7 +185,7 @@ def prepare_sources_to_download(source_name):
         formatted_entry = (
             f"{'':<1}"  # Source name in 20 bytes
             f"{new_values[0]:<15}"  # Source name in 20 bytes
-            f"{new_values[1]:<16}"  # 
+            f"{new_values[1]:<16}"  #
             f"{new_values[2]:<16}"  #
             f"{new_values[3]:<9}"  #
             f"{new_values[4]:<9}"  #
@@ -194,25 +200,25 @@ def prepare_sources_to_download(source_name):
             # If the file doesn't exist, start with a formatted header line
             header = (
                 f"{'|  id   ':<14}"  # Source name in 20 bytes
-                f"{'|    ra ':<16}"  # 
+                f"{'|    ra ':<16}"  #
                 f"{'|     dec ':<16}"  #
                 f"{'| best':<9}"  #
                 f"{'|  size':<9}"  #
                 f"{' |':<1}\n"  #
                 f"{'|   char    ':<14}"  # Source name in 20 bytes
-                f"{'|     double ':<16}"  # 
+                f"{'|     double ':<16}"  #
                 f"{'|     double  ':<16}"  #
                 f"{'| char':<9}"  #
                 f"{'| double':<9}"  #
                 f"{' |':<1}\n"  #
                 f"{'|       ':<14}"  # Source name in 20 bytes
-                f"{'|     deg ':<16}"  # 
+                f"{'|     deg ':<16}"  #
                 f"{'|     deg  ':<16}"  #
                 f"{'|  ':<9}"  #
                 f"{'| arcsec':<9}"  #
                 f"{' |':<1}\n"  #
                 f"{'|  null   ':<14}"  # Source name in 20 bytes
-                f"{'|  null ':<16}"  # 
+                f"{'|  null ':<16}"  #
                 f"{'|  null  ':<16}"  #
                 f"{'|  null':<9}"  #
                 f"{'|  null':<9}"  #
@@ -280,10 +286,12 @@ python3 2MASS_images.py
 """
 if __name__ == "__main__":
     fits_files_folder='2MASS_files'
-    source_name='Haro6-33'
+    source_name='IRAS04108+2803'
+    twomass_image_to_png(fits_files_folder,source_name,pctl=99.5)
     twomass_image_to_png(fits_files_folder,source_name,pctl=98.5)
+
     # mass_produce_2mass_images(folder=fits_files_folder,pctl=99.5)
+    # mass_produce_2mass_images(folder=fits_files_folder,pctl=98.5)
 
     # sources_to_download_file='text_files/names_to_simbad_names.txt'
     # prepare_sources_to_download(source_name)
-

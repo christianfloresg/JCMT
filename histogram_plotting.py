@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pathlib import Path
 from scipy.stats import sem, ks_2samp
 import os
 from scipy.stats import sem, ks_2samp, mannwhitneyu, anderson_ksamp
 from datetime import date,datetime
+from pathlib import Path
 
 today = str(date.today())
 currentDateAndTime = datetime.now()
@@ -255,7 +255,7 @@ def compute_statistics(df, property="gravity"):
 # ----------------------------
 def main():
     FILE = "text_files/combined_yso_parameters_v2.xlsx"
-    property = 'spectral_index_SED'#"Tbol"#'spectral_index_corrected_SED'#'spectral_index_SED' # "gravity"
+    property = 'spectral_index_corrected_SED'#"Tbol"#'spectral_index_corrected_SED'#'spectral_index_SED' # "gravity"
     OUTDIR = f"histograms/group_output_{property}"
 
     df = load_data(FILE)

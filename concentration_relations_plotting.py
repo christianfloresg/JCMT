@@ -570,9 +570,9 @@ def plot_parameter_vs_mgas_median_with_UL(
 
     plt.xlabel(param_col, size=16)
     ylab = "Mgas (Msun) median ± max deviation"
-    if divide_by_binarity:
-        ylab += f" / {binarity_col}"
-    ylab += " (UL as arrows)"
+    # if divide_by_binarity:
+    #     ylab += f" / {binarity_col}"
+    # ylab += " (UL as arrows)"
     plt.ylabel(ylab, size=16)
 
     plt.tick_params(axis="both", labelsize=14)
@@ -611,14 +611,14 @@ if __name__ == "__main__":
     # plot_gravity_vs_ratio_C18O_over_HCOplus(df)
     #
     # # (4) gravity vs Mgas_Msun_* with median + max-deviation error bars
-    plot_gravity_vs_mgas_median(df, divide_by_binarity=True)
+    # plot_gravity_vs_mgas_median(df, divide_by_binarity=True)
 
     # # (5) Temperature vs Mgas_Msun_* with median + max-deviation error bars
 
-    # plot_parameter_vs_mgas_median_with_UL(
-    #     df,
-    #     param_col="gravity",
-    #     divide_by_binarity=True,      # per-star
-    #     binarity_col="Binarity",
-    #     envelope_coloring=True
-    # )
+    plot_parameter_vs_mgas_median_with_UL(
+        df,
+        param_col="Temperature",
+        divide_by_binarity=True,      # per-star
+        binarity_col="Binarity",
+        envelope_coloring=True
+    )
