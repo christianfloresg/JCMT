@@ -21,7 +21,7 @@ hour_now = str(currentDateAndTime.hour)
 https://irsa.ipac.caltech.edu/applications/2MASS/IM/interactive.html
 '''
 
-def offset_coordinates(ax,skycoord_object):
+def offset_coordinates(ax,skycoord_object, show_RA=True, show_DEC=True):
     ra = ax.coords['ra']
     ra.set_auto_axislabel(False)
     dec = ax.coords['dec']
@@ -40,7 +40,7 @@ def offset_coordinates(ax,skycoord_object):
     lon.set_ticks_position('b')
     lon.set_ticklabel_position('b')
     lon.set_axislabel_position('b')
-    lon.set_ticks(spacing=30. * u.arcsec)
+    lon.set_ticks(spacing=20. * u.arcsec)
 
     lat = overlay['lat']
     lat.set_format_unit(u.arcsec)
@@ -64,8 +64,11 @@ def offset_coordinates(ax,skycoord_object):
     # lat.set_ticklabel_visible(False)
     # lon.set(xlabel=None)
 
-    lon.set_ticklabel_visible(False)  # DEC
-    # lat.set_ticklabel_visible(False)  # RA
+    if show_RA is False:
+        lon.set_ticklabel_visible(False)  # DEC
+
+    if show_DEC is False:
+        lat.set_ticklabel_visible(False)  # RA
 
     # fig1.set_xticklabels([])
     # fig1.set_yticklabels([])
@@ -130,7 +133,7 @@ def histograms():
     plt.yscale('log')
     plt.show()
 
-def twomass_image_to_png(fits_files,source_name,plot=True, pctl= 100):
+def twomass_image_to_png(fits_files,source_name,plot=True, pctl= 100, show_RA=True, show_DEC=True):
 
     J_data,H_data,K_data,wcs = open_files(fits_files,source_name)
 
@@ -161,7 +164,7 @@ def twomass_image_to_png(fits_files,source_name,plot=True, pctl= 100):
 
     fig1.imshow(rgb, origin='lower')
 
-    offset_coordinates(fig1, skycoord_object)
+    offset_coordinates(fig1, skycoord_object, show_RA=show_RA, show_DEC=show_DEC)
 
 
     plt.savefig('Figures/2MASS/'+source_name+'_upper_'+str(pctl).replace('.','p')+'_'+today+'.png', bbox_inches='tight',dpi=300)
@@ -286,9 +289,11 @@ python3 2MASS_images.py
 """
 if __name__ == "__main__":
     fits_files_folder='2MASS_files'
-    source_name='IRAS04108+2803'
-    twomass_image_to_png(fits_files_folder,source_name,pctl=99.5)
-    twomass_image_to_png(fits_files_folder,source_name,pctl=98.5)
+    source_name='YLW58'
+    RA_tick=False
+    DEC_tick=True
+    twomass_image_to_png(fits_files_folder,source_name,pctl=99.5,show_RA=RA_tick,show_DEC=DEC_tick)
+    twomass_image_to_png(fits_files_folder,source_name,pctl=98.5,show_RA=RA_tick,show_DEC=DEC_tick)
 
     # mass_produce_2mass_images(folder=fits_files_folder,pctl=99.5)
     # mass_produce_2mass_images(folder=fits_files_folder,pctl=98.5)

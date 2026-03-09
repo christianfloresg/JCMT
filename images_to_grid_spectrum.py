@@ -170,7 +170,7 @@ if __name__ == "__main__":
     order_txt   = "text_files/source_order.txt"              # your hand-made list
     which       = "central"                       # or "fov"
     grid_shape  = (7, 5)
-    out_png     = f"./Figures/grid_plots/spectra_grid_{which}_ordered.png"
+    out_png     = f"./Figures/grid_plots/spectra_grid_{which}_ordered_March5.png"
 
     paths = order_image_paths(
         spectra_dir=spectra_dir,

@@ -122,7 +122,7 @@ def plot_histogram(groups, outdir, property ="gravity",save=False):
         bins = np.arange(-1.8, 2.0, 0.20)
 
     elif property == "Tbol":
-        bins = np.arange(50, 1600, 100)
+        bins = np.arange(50, 1800, 100)
 
 
 
@@ -191,6 +191,8 @@ def compute_statistics(df, property="gravity"):
             "N": [len(x_env), len(x_free)],
             f"Mean {property}": [np.mean(x_env) if len(x_env) else np.nan,
                                 np.mean(x_free) if len(x_free) else np.nan],
+            "Stdev": [np.std(x_env) if len(x_env) > 1 else np.nan,
+                          np.std(x_free) if len(x_free) > 1 else np.nan],
             "Std error": [sem(x_env) if len(x_env) > 1 else np.nan,
                           sem(x_free) if len(x_free) > 1 else np.nan],
             f"Median {property}": [np.median(x_env) if len(x_env) else np.nan,
@@ -255,15 +257,19 @@ def compute_statistics(df, property="gravity"):
 # ----------------------------
 def main():
     FILE = "text_files/combined_yso_parameters_v2.xlsx"
-    property = 'spectral_index_corrected_SED'#"Tbol"#'spectral_index_corrected_SED'#'spectral_index_SED' # "gravity"
-    OUTDIR = f"histograms/group_output_{property}"
+    # property = 'spectral_index_corrected_SED'#"Tbol"#'spectral_index_corrected_SED'#'spectral_index_SED' # "gravity"
+    # property = "gravity"
+    # property = 'spectral_index_SED'
+    property = 'Tbol'
+
+    OUTDIR = f"histograms/group_output_March5_{property}"
 
     df = load_data(FILE)
     df = classify_sources(df)
 
     groups = split_groups(df)
     save_groups(groups, OUTDIR)
-    plot_histogram(groups, OUTDIR, property,save=True)
+    plot_histogram(groups, OUTDIR, property,save=False)
     compute_statistics(df, property)
 
 

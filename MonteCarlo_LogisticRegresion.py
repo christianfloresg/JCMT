@@ -257,7 +257,7 @@ def plot_logit(
         ax.set_title(title, fontsize=16)
 
     fig.tight_layout()
-    # fig.savefig("logistic_curve_envelope_vs_gravity.png", dpi=300)
+    fig.savefig("Figures/logistic_regresion/logistic_curve_envelope_vs_gravity.png", dpi=300)
     plt.show()
 
 
@@ -325,7 +325,7 @@ def run(
 if __name__ == "__main__":
     run(
         path=DEFAULT_PATH,
-        use_monte_carlo=False,  # set False to use standard GLM CI instead
-        n_sims=500,
+        use_monte_carlo=True,  # set False to use standard GLM CI instead
+        n_sims=5000,
         alpha=0.05,
     )

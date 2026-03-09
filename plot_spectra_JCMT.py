@@ -151,7 +151,7 @@ def make_averaged_spectrum_data(source_name, molecule):
     return averaged_spectrum, velocity
 
 
-def make_central_spectrum_data(source_name, molecule,noskycoord=False):
+def make_central_spectrum_data(source_name, molecule, noskycoord=False):
     """
     Average spectrum of the central beam.
 
@@ -175,8 +175,6 @@ def make_central_spectrum_data(source_name, molecule,noskycoord=False):
     pixel_scale_ra = data_cube.header['CDELT1'] * 3600  # arcseconds per pixel
     pixel_scale_dec = data_cube.header['CDELT2'] * 3600  # arcseconds per pixel
     aperture_radius_pixels = abs(aperture_radius/pixel_scale_ra)
-
-
 
     velocity = data_cube.vel
 
@@ -308,9 +306,10 @@ def mass_produce_spectral_plots(folder_fits, molecule=None, molecules=None):
 
 if __name__ == "__main__":
 
-    source_name = 'T-Tauri'
-    # source_name = 'Elia33'
+    # source_name = 'T-Tauri'
+    source_name = 'Elia32'
     # molecule ='HCO+'
-    molecule ='C18O'
+    # molecule ='C18O'
     # distance = 130
-    mass_produce_spectral_plots("sdf_and_fits", molecules=("HCO+", "C18O"))
+    plot_spectrum_two_molecules(source_name, molecules=("HCO+", "C18O"), type='central', save=True, plot=False, noskycoord=True)
+    # mass_produce_spectral_plots("sdf_and_fits", molecules=("HCO+", "C18O"))

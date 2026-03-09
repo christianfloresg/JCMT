@@ -1320,10 +1320,6 @@ if __name__ == "__main__":
     ## Step 0
     # retrieve_and_write_spectral_properties(source_name, molecule, noskycoord=False)
 
-    ### Step 1 creates a plot of the spectrum
-    plot_spectrum(source_name, molecule,type='central',save=True)
-    # plot_spectrum(source_name, molecule,type='fov',save=False)
-
     ### Step 3
     ### Plot the maps
     # area_and_emission_of_map_above_threshold(source_name, molecule, n_sigma=1)
