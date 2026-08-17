@@ -257,7 +257,7 @@ def plot_logit(
         ax.set_title(title, fontsize=16)
 
     fig.tight_layout()
-    fig.savefig("Figures/logistic_regresion/logistic_curve_envelope_vs_gravity.png", dpi=300)
+    fig.savefig("Figures/logistic_regresion/logistic_curve_envelope_vs_gravity2.png", dpi=300)
     plt.show()
 
 

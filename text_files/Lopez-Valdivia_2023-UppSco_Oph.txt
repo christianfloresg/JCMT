@@ -1,4 +1,4 @@
-Title: The IGRINS YSO Survey III: Stellar parameters of pre-main sequence 
+fTitle: The IGRINS YSO Survey III: Stellar parameters of pre-main sequence 
        stars in Ophiuchus and Upper Scorpius 
 Authors: Lopez-Valdivia R., Mace G.N., Han E., Sawczynec E., Hernandez J., 
     Prato L., Johns-Krull C.M., Oh H., Lee J.-J., Kraus A., Llama J., 
